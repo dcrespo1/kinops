@@ -1,0 +1,22 @@
+package components
+
+import (
+	"time"
+
+	"github.com/dcrespo1/kinops/internal/scheduling"
+)
+
+templ ViewNavigation(active string, date time.Time) {
+	<nav class="view-tabs" aria-label="Schedule views">
+		<a href={ templ.URL("/daily?date=" + date.Format(scheduling.DateLayout)) } aria-current={ ariaCurrent(active == "daily") }>Daily</a>
+		<a href={ templ.URL("/weekly?date=" + date.Format(scheduling.DateLayout)) } aria-current={ ariaCurrent(active == "weekly") }>Weekly</a>
+		<a href={ templ.URL("/monthly?month=" + date.Format("2006-01")) } aria-current={ ariaCurrent(active == "monthly") }>Monthly</a>
+	</nav>
+}
+
+func ariaCurrent(active bool) string {
+	if active {
+		return "page"
+	}
+	return "false"
+}

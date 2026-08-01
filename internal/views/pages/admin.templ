@@ -1,0 +1,115 @@
+package pages
+
+import (
+	"fmt"
+	"time"
+
+	"github.com/dcrespo1/kinops/internal/domain"
+	"github.com/dcrespo1/kinops/internal/views/layouts"
+)
+
+type AdminPageData struct {
+	Dashboard domain.AdminDashboard
+	CSRFToken string
+	BaseURL   string
+}
+
+templ AdminLogin(errorMessage string) {
+	@layouts.Base("Admin login · KinOps", adminLoginContent(errorMessage))
+}
+
+templ adminLoginContent(errorMessage string) {
+	<section class="narrow admin-login">
+		<p class="eyebrow">Administration</p>
+		<h1>Sign in</h1>
+		<p>Use the household administrator credentials.</p>
+		if errorMessage != "" {
+			<p class="error" role="alert">{ errorMessage }</p>
+		}
+		<form method="post" action="/admin/login">
+			<label>Username<input name="username" autocomplete="username" required autofocus/></label>
+			<label>Password<input type="password" name="password" autocomplete="current-password" required/></label>
+			<button type="submit">Sign in</button>
+		</form>
+	</section>
+}
+
+templ Admin(data AdminPageData) {
+	@layouts.Base("Admin · KinOps", adminContent(data))
+}
+
+templ adminContent(data AdminPageData) {
+	<section class="page-header admin-header">
+		<div><p class="eyebrow">Administration</p><h1>Household dashboard</h1><p>Updated { data.Dashboard.GeneratedAt.Format("Jan 2, 2006 at 3:04 PM") }</p></div>
+		<form method="post" action="/admin/logout"><input type="hidden" name="csrf_token" value={ data.CSRFToken }/><button class="secondary" type="submit">Sign out</button></form>
+	</section>
+	<section class="admin-section" aria-labelledby="analytics-heading">
+		<div class="section-heading"><div><p class="eyebrow">Analytics</p><h2 id="analytics-heading">Completion overview</h2></div></div>
+		<div class="metric-grid">
+			@summaryMetric("Last 7 days", data.Dashboard.SevenDay)
+			@summaryMetric("Last 30 days", data.Dashboard.ThirtyDay)
+			<article class="metric-card"><span>Overdue now</span><strong>{ fmt.Sprint(data.Dashboard.Overdue) }</strong><small>Pending before today</small></article>
+		</div>
+		<div class="admin-people-grid">
+			for _, person := range data.Dashboard.People {
+				<article class="person-analytics" style={ fmt.Sprintf("--person-color: %s", person.Person.Color) }>
+					<header><span class="person-swatch"></span><h3>{ person.Person.Name }</h3><strong>{ fmt.Sprintf("%d%%", person.RatePercent) }</strong></header>
+					<div class="progress-track" role="progressbar" aria-valuemin="0" aria-valuemax="100" aria-valuenow={ fmt.Sprint(person.RatePercent) }><span style={ fmt.Sprintf("width:%d%%", person.RatePercent) }></span></div>
+					<dl><div><dt>Assigned</dt><dd>{ fmt.Sprint(person.Assigned) }</dd></div><div><dt>Completed</dt><dd>{ fmt.Sprint(person.Completed) }</dd></div><div><dt>Streak</dt><dd>{ fmt.Sprintf("%d chore-days", person.Streak) }</dd></div><div><dt>Overdue</dt><dd>{ fmt.Sprint(person.Overdue) }</dd></div></dl>
+				</article>
+			}
+		</div>
+	</section>
+	<section class="admin-section" aria-labelledby="activity-heading">
+		<div class="section-heading"><div><p class="eyebrow">History</p><h2 id="activity-heading">Recent activity</h2></div></div>
+		if len(data.Dashboard.Activity) == 0 {
+			<div class="empty"><p>No completion activity yet.</p></div>
+		} else {
+			<div class="activity-list">
+				for _, item := range data.Dashboard.Activity {
+					<article><div><strong>{ item.ChoreName }</strong><span>{ activityLabel(item) }</span></div><time datetime={ item.OccurredAt.Format(time.RFC3339) }>{ item.OccurredAt.In(data.Dashboard.GeneratedAt.Location()).Format("Jan 2, 3:04 PM") }</time></article>
+				}
+			</div>
+		}
+	</section>
+	<section class="admin-section" id="calendar" aria-labelledby="calendar-heading">
+		<div class="section-heading"><div><p class="eyebrow">Calendar</p><h2 id="calendar-heading">Subscription feeds</h2></div></div>
+		<div class="settings-summary"><div><span>Household timezone</span><strong>{ data.Dashboard.TimeZone }</strong></div><div><span>Upcoming horizon</span><strong>{ fmt.Sprintf("%d days", data.Dashboard.HorizonDays) }</strong></div></div>
+		<p class="admin-help">Subscribe with the URL for each person. Rotating a URL immediately invalidates the old subscription.</p>
+		<div class="calendar-admin-list">
+			for _, person := range data.Dashboard.CalendarPeople {
+				<article class="calendar-admin-card" x-data="{ copied: false }" style={ fmt.Sprintf("--person-color: %s", person.Color) }>
+					<header><span class="person-swatch"></span><h3>{ person.Name }</h3></header>
+					<label>ICS subscription URL<input x-ref="feed" readonly value={ calendarURL(data.BaseURL, person.CalendarToken) }/></label>
+					<div class="actions">
+						<button class="secondary" type="button" x-on:click="navigator.clipboard.writeText($refs.feed.value); copied = true; setTimeout(() => copied = false, 2000)"><span x-show="!copied">Copy URL</span><span x-show="copied" x-cloak>Copied</span></button>
+						<form method="post" action={ templ.URL(fmt.Sprintf("/admin/calendar/%d/rotate", person.ID)) } hx-confirm="Rotate this feed URL? Existing calendar subscriptions for this person will stop updating."><input type="hidden" name="csrf_token" value={ data.CSRFToken }/><button class="danger" type="submit">Rotate URL</button></form>
+					</div>
+				</article>
+			}
+		</div>
+	</section>
+	<section class="admin-section" aria-labelledby="events-heading">
+		<div class="section-heading"><div><p class="eyebrow">Family calendar</p><h2 id="events-heading">Household events</h2></div><a class="button" href="/events">Manage events</a></div>
+		<p class="admin-help">Add birthdays, appointments, vacations, holidays, and other agenda items.</p>
+	</section>
+}
+
+templ summaryMetric(label string, metric domain.AnalyticsWindow) {
+	<article class="metric-card"><span>{ label }</span><strong>{ fmt.Sprintf("%d%%", metric.RatePercent) }</strong><small>{ fmt.Sprintf("%d of %d completed", metric.Completed, metric.Assigned) }</small><div class="progress-track" role="progressbar" aria-label={ label } aria-valuemin="0" aria-valuemax="100" aria-valuenow={ fmt.Sprint(metric.RatePercent) }><span style={ fmt.Sprintf("width:%d%%", metric.RatePercent) }></span></div></article>
+}
+
+func calendarURL(baseURL, token string) string {
+	return baseURL + "/calendar/" + token + ".ics"
+}
+
+func activityLabel(item domain.CompletionActivity) string {
+	switch item.EventType {
+	case domain.EventCompleted:
+		return item.PersonName + " marked it complete"
+	case domain.EventReopened:
+		return item.PersonName + " reopened it"
+	default:
+		return item.PersonName + " updated it"
+	}
+}

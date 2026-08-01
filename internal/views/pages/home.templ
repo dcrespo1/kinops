@@ -1,0 +1,15 @@
+package pages
+
+import "github.com/dcrespo1/kinops/internal/views/layouts"
+
+templ Home() {
+	@layouts.Base("KinOps", homeContent())
+}
+
+templ homeContent() {
+	<section>
+		<h1>KinOps</h1>
+		<p>Your household operations hub is running.</p>
+		<p><a class="button" href="/chores">Manage chores</a></p>
+	</section>
+}

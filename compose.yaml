@@ -1,0 +1,47 @@
+name: kinops
+
+services:
+  kinops:
+    build:
+      context: .
+      dockerfile: dockerfile
+      args:
+        GO_VERSION: "1.26.5"
+    image: kinops:local
+    container_name: kinops
+    restart: unless-stopped
+
+    environment:
+      KINOPS_LISTEN_ADDRESS: ":8081"
+      KINOPS_DATABASE_PATH: "/data/kinops.db"
+      KINOPS_TIMEZONE: "${KINOPS_TIMEZONE:-America/New_York}"
+      KINOPS_ADMIN_USERNAME: "${KINOPS_ADMIN_USERNAME:-}"
+      KINOPS_ADMIN_PASSWORD_HASH: "${KINOPS_ADMIN_PASSWORD_HASH:-}"
+      KINOPS_ADMIN_COOKIE_SECURE: "${KINOPS_ADMIN_COOKIE_SECURE:-false}"
+
+    ports:
+      - "${KINOPS_PORT:-8081}:8081"
+
+    volumes:
+      - kinops-data:/data
+
+    healthcheck:
+      test:
+        - CMD
+        - /app/kinops
+        - healthcheck
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 5s
+
+    security_opt:
+      - no-new-privileges:true
+
+    read_only: true
+
+    tmpfs:
+      - /tmp:size=16m,mode=1777
+
+volumes:
+  kinops-data:

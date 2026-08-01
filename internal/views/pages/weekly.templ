@@ -1,0 +1,142 @@
+package pages
+
+import (
+	"fmt"
+	"time"
+
+	"github.com/dcrespo1/kinops/internal/domain"
+	"github.com/dcrespo1/kinops/internal/scheduling"
+	"github.com/dcrespo1/kinops/internal/views/components"
+	"github.com/dcrespo1/kinops/internal/views/layouts"
+)
+
+templ Weekly(view domain.WeekView) {
+	@layouts.Base("Weekly · KinOps", weeklyContent(view))
+}
+
+templ weeklyContent(view domain.WeekView) {
+	@components.ViewNavigation("weekly", view.StartDate)
+	<section class="calendar-header">
+		<div><p class="eyebrow">Weekly view</p><h1>{ weeklyTitle(view) }</h1><p>{ weeklySummary(view) }</p></div>
+		<nav class="date-nav" aria-label="Week navigation">
+			<a class="button secondary" href={ templ.URL("/weekly?date=" + view.StartDate.AddDate(0, 0, -7).Format(scheduling.DateLayout)) } aria-label="Previous week">←</a>
+			<a class="button secondary" href="/weekly">This week</a>
+			<a class="button secondary" href={ templ.URL("/weekly?date=" + view.StartDate.AddDate(0, 0, 7).Format(scheduling.DateLayout)) } aria-label="Next week">→</a>
+		</nav>
+	</section>
+	if view.EndDate.After(view.HorizonEnd) {
+		<p class="horizon-note">Upcoming schedules are generated through { view.HorizonEnd.Format("January 2, 2006") }.</p>
+	}
+	if len(view.People) == 0 {
+		<section class="empty setup-empty">
+			<h2>Set up your household</h2>
+			<p>Add people to see the weekly schedule.</p>
+			<a class="button" href="/people">Add people</a>
+		</section>
+	}
+	if len(view.People) > 0 {
+		<section class="week-desktop" aria-label="Weekly chores and events grid">
+			<div class="week-grid week-grid-header">
+				<div class="week-person-label"></div>@weeklyDayHeaders(view.StartDate)
+			</div>
+			<div class="week-grid week-event-row">
+				<div class="week-person-label"><strong>Events</strong></div>
+				for _, day := range view.EventDays {
+					<div class="week-cell week-event-cell">
+						for _, event := range day.Events {
+							<a class="week-event" href={ templ.URL("/daily?date=" + day.Date.Format(scheduling.DateLayout)) } title={ eventOccurrenceTitle(event, day.Date.Location()) }><span>{ eventOccurrenceTime(event, day.Date.Location()) }</span>{ event.Event.Title }</a>
+						}
+						if len(day.Events) == 0 {
+							<span class="week-empty">—</span>
+						}
+					</div>
+				}
+			</div>
+			for _, person := range view.People {
+				<div class="week-grid week-person-row" style={ fmt.Sprintf("--person-color: %s", person.Person.Color) }>
+					<div class="week-person-label"><span class="person-swatch"></span><strong>{ person.Person.Name }</strong></div>
+					for _, day := range person.Days {
+						<div class="week-cell">
+							for _, item := range day.Instances {
+								@components.CalendarTask(item, view.Today)
+							}
+							if len(day.Instances) == 0 {
+								<span class="week-empty">—</span>
+							}
+						</div>
+					}
+				</div>
+			}
+		</section>
+		<section class="week-mobile" aria-label="Weekly chores by day">
+			for dayIndex := 0; dayIndex < 7; dayIndex++ {
+				<article class="week-mobile-day">
+					<header><a href={ templ.URL("/daily?date=" + view.StartDate.AddDate(0, 0, dayIndex).Format(scheduling.DateLayout)) }><strong>{ view.StartDate.AddDate(0, 0, dayIndex).Format("Monday") }</strong><span>{ view.StartDate.AddDate(0, 0, dayIndex).Format("Jan 2") }</span></a></header>
+					if dayIndex < len(view.EventDays) && len(view.EventDays[dayIndex].Events) > 0 {
+						<div class="mobile-event-row">
+							<strong>Events</strong>
+							<div>
+								for _, event := range view.EventDays[dayIndex].Events {
+									<a class="week-event" href={ templ.URL("/daily?date=" + view.EventDays[dayIndex].Date.Format(scheduling.DateLayout)) }><span>{ eventOccurrenceTime(event, view.EventDays[dayIndex].Date.Location()) }</span>{ event.Event.Title }</a>
+								}
+							</div>
+						</div>
+					}
+					for _, person := range view.People {
+						<div class="mobile-person-row" style={ fmt.Sprintf("--person-color: %s", person.Person.Color) }>
+							<div class="mobile-person-name"><span class="person-swatch"></span>{ person.Person.Name }</div>
+							<div class="mobile-tasks">
+								for _, item := range person.Days[dayIndex].Instances {
+									@components.CalendarTask(item, view.Today)
+								}
+								if len(person.Days[dayIndex].Instances) == 0 {
+									<span class="week-empty">Nothing scheduled</span>
+								}
+							</div>
+						</div>
+					}
+				</article>
+			}
+		</section>
+	}
+}
+
+templ weeklyDayHeaders(start time.Time) {
+	for index := 0; index < 7; index++ {
+		<a class="week-day-header" href={ templ.URL("/daily?date=" + start.AddDate(0, 0, index).Format(scheduling.DateLayout)) }><strong>{ start.AddDate(0, 0, index).Format("Mon") }</strong><span>{ start.AddDate(0, 0, index).Format("Jan 2") }</span></a>
+	}
+}
+
+func weeklyTitle(view domain.WeekView) string {
+	if view.StartDate.Year() == view.EndDate.Year() && view.StartDate.Month() == view.EndDate.Month() {
+		return fmt.Sprintf("%s %d–%d, %d", view.StartDate.Format("January"), view.StartDate.Day(), view.EndDate.Day(), view.StartDate.Year())
+	}
+	if view.StartDate.Year() == view.EndDate.Year() {
+		return fmt.Sprintf("%s %d – %s %d, %d", view.StartDate.Format("Jan"), view.StartDate.Day(), view.EndDate.Format("Jan"), view.EndDate.Day(), view.StartDate.Year())
+	}
+	return fmt.Sprintf("%s %d, %d – %s %d, %d", view.StartDate.Format("Jan"), view.StartDate.Day(), view.StartDate.Year(), view.EndDate.Format("Jan"), view.EndDate.Day(), view.EndDate.Year())
+}
+
+func weeklySummary(view domain.WeekView) string {
+	total, done := 0, 0
+	eventIDs := map[int64]bool{}
+	for _, day := range view.EventDays {
+		for _, event := range day.Events {
+			eventIDs[event.Occurrence.ID] = true
+		}
+	}
+	for _, person := range view.People {
+		for _, day := range person.Days {
+			for _, item := range day.Instances {
+				total++
+				if item.Instance.Status == domain.InstanceDone {
+					done++
+				}
+			}
+		}
+	}
+	if total == 0 && len(eventIDs) == 0 {
+		return "No chores or events scheduled this week."
+	}
+	return fmt.Sprintf("%d chores · %d complete · %d events", total, done, len(eventIDs))
+}

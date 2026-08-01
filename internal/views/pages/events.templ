@@ -1,0 +1,171 @@
+package pages
+
+import (
+	"fmt"
+	"time"
+
+	"github.com/dcrespo1/kinops/internal/domain"
+	"github.com/dcrespo1/kinops/internal/scheduling"
+	"github.com/dcrespo1/kinops/internal/views/layouts"
+)
+
+type EventFormData struct {
+	Event  domain.HouseholdEvent
+	People []domain.Person
+	Error  string
+	Edit   bool
+}
+
+templ Events(events []domain.HouseholdEvent) {
+	@layouts.Base("Events · KinOps", eventsContent(events))
+}
+
+templ eventsContent(events []domain.HouseholdEvent) {
+	<section class="page-header">
+		<div><p class="eyebrow">Family calendar</p><h1>Household events</h1><p>Birthdays, appointments, vacations, and anything else on the family agenda.</p></div>
+		<a class="button" href="/events/new">New event</a>
+	</section>
+	if len(events) == 0 {
+		<section class="empty"><p>No household events yet.</p><a href="/events/new">Add the first event</a></section>
+	} else {
+		<section class="event-admin-list">
+			for _, event := range events {
+				<article class="event-admin-card">
+					<div><p class="eyebrow">{ eventRuleLabel(event.Rule) }</p><h2>{ event.Title }</h2><p>{ eventDateLabel(event) }</p></div>
+					<div class="actions"><a class="button secondary" href={ templ.URL(fmt.Sprintf("/events/%d/edit", event.ID)) }>Edit</a><form method="post" action={ templ.URL(fmt.Sprintf("/events/%d", event.ID)) } hx-confirm="Archive this event and remove its future occurrences?"><input type="hidden" name="_method" value="delete"/><button class="danger" type="submit">Archive</button></form></div>
+				</article>
+			}
+		</section>
+	}
+}
+
+templ EventForm(data EventFormData) {
+	@layouts.Base("Event · KinOps", eventFormContent(data))
+}
+
+templ eventFormContent(data EventFormData) {
+	<section class="narrow event-form" x-data={ fmt.Sprintf("{ allDay: %t, rule: '%s' }", data.Event.AllDay, data.Event.Rule.Type) }>
+		<p class="eyebrow">Family calendar</p>
+		if data.Edit {
+			<h1>Edit event</h1>
+		} else {
+			<h1>New event</h1>
+		}
+		if data.Error != "" {
+			<p class="error" role="alert">{ data.Error }</p>
+		}
+		<form method="post" action={ templ.URL(ifThen(data.Edit, fmt.Sprintf("/events/%d", data.Event.ID), "/events")) }>
+			if data.Edit {
+				<input type="hidden" name="_method" value="put"/>
+			}
+			<label>Title<input name="title" required maxlength="200" value={ data.Event.Title }/></label>
+			<div class="form-grid">
+				<label>
+					Category
+					<select name="category">
+						if data.Event.Category != "" && !domain.IsEventCategory(data.Event.Category) {
+							<option value={ data.Event.Category } selected>{ data.Event.Category } (existing)</option>
+						}
+						for _, category := range domain.EventCategories() {
+							<option value={ category } selected?={ data.Event.Category == category }>{ category }</option>
+						}
+					</select>
+				</label>
+				<label>Location<input name="location" value={ data.Event.Location }/></label>
+			</div>
+			<label>Description<textarea name="description" rows="3">{ data.Event.Description }</textarea></label>
+			<label class="check"><input type="checkbox" name="all_day" value="1" checked?={ data.Event.AllDay } x-model="allDay"/>All-day event</label>
+			<div class="form-grid"><label>Start date<input type="date" name="start_date" required value={ eventDateValue(data.Event.StartDate) }/></label><label><span x-text="allDay ? 'Final day' : 'End date'">Final day</span><input type="date" name="end_date" required value={ eventFormEndDateValue(data.Event) }/></label></div>
+			<div class="form-grid" x-show="!allDay"><label>Start time<input type="time" name="start_time" required value={ data.Event.StartTime } disabled?={ data.Event.AllDay } x-bind:disabled="allDay"/></label><label>End time<input type="time" name="end_time" required value={ data.Event.EndTime } disabled?={ data.Event.AllDay } x-bind:disabled="allDay"/></label></div>
+			<label>Repeats<select name="rule_type" x-model="rule"><option value="one_off" selected?={ data.Event.Rule.Type == domain.EventRuleOneOff }>Does not repeat</option><option value="daily" selected?={ data.Event.Rule.Type == domain.EventRuleDaily }>Daily</option><option value="every_n_days" selected?={ data.Event.Rule.Type == domain.EventRuleEveryNDays }>Every N days</option><option value="weekly_days" selected?={ data.Event.Rule.Type == domain.EventRuleWeeklyDays }>Specific weekdays</option><option value="monthly_day" selected?={ data.Event.Rule.Type == domain.EventRuleMonthlyDay }>Monthly</option><option value="annual" selected?={ data.Event.Rule.Type == domain.EventRuleAnnual }>Yearly</option></select></label>
+			<div x-show="rule === 'every_n_days'"><label>Every how many days?<input type="number" min="1" max="3650" name="interval" required value={ positiveNumberValue(data.Event.Rule.Interval) } disabled?={ data.Event.Rule.Type != domain.EventRuleEveryNDays } x-bind:disabled="rule !== 'every_n_days'"/></label></div>
+			<fieldset x-show="rule === 'weekly_days'" disabled?={ data.Event.Rule.Type != domain.EventRuleWeeklyDays } x-bind:disabled="rule !== 'weekly_days'">
+				<legend>Weekdays</legend>
+				for day := 0; day < 7; day++ {
+					<label class="check"><input type="checkbox" name="weekdays" value={ fmt.Sprint(day) } checked?={ eventContainsWeekday(data.Event.Rule.Weekdays, time.Weekday(day)) }/>{ time.Weekday(day).String() }</label>
+				}
+			</fieldset>
+			<div x-show="rule === 'monthly_day'"><label>Day of month<input type="number" min="1" max="31" name="day" required value={ positiveNumberValue(data.Event.Rule.DayOfMonth) } disabled?={ data.Event.Rule.Type != domain.EventRuleMonthlyDay } x-bind:disabled="rule !== 'monthly_day'"/></label></div>
+			<div class="form-grid" x-show="rule === 'annual'">
+				<label>
+					Month
+					<select name="month" disabled?={ data.Event.Rule.Type != domain.EventRuleAnnual } x-bind:disabled="rule !== 'annual'">
+						for month := 1; month <= 12; month++ {
+							<option value={ fmt.Sprint(month) } selected?={ int(data.Event.Rule.Month) == month }>{ time.Month(month).String() }</option>
+						}
+					</select>
+				</label>
+				<label>Day<input type="number" min="1" max="31" name="annual_day" required value={ positiveNumberValue(data.Event.Rule.DayOfMonth) } disabled?={ data.Event.Rule.Type != domain.EventRuleAnnual } x-bind:disabled="rule !== 'annual'"/></label>
+			</div>
+			<div x-show="rule !== 'one_off'"><label>Stop repeating (optional)<input type="date" name="recurrence_end_date" value={ eventOptionalDateValue(data.Event.RecurrenceEndDate) } disabled?={ data.Event.Rule.Type == domain.EventRuleOneOff } x-bind:disabled="rule === 'one_off'"/></label></div>
+			<fieldset>
+				<legend>Who is this for?</legend>
+				<p class="admin-help">Leave everyone unchecked for a household-wide event.</p>
+				for _, person := range data.People {
+					<label class="check"><input type="checkbox" name="audience_person_ids" value={ fmt.Sprint(person.ID) } checked?={ eventAudienceContains(data.Event.AudiencePersonIDs, person.ID) }/>{ person.Name }</label>
+				}
+			</fieldset>
+			<div class="actions"><button type="submit">Save event</button><a href="/events">Cancel</a></div>
+		</form>
+	</section>
+}
+
+func eventDateValue(value time.Time) string {
+	if value.IsZero() {
+		return ""
+	}
+	return value.Format(scheduling.DateLayout)
+}
+func eventOptionalDateValue(value *time.Time) string {
+	if value == nil {
+		return ""
+	}
+	return eventDateValue(*value)
+}
+func eventFormEndDateValue(event domain.HouseholdEvent) string {
+	if event.EndDate.IsZero() {
+		return ""
+	}
+	if event.AllDay {
+		return event.EndDate.AddDate(0, 0, -1).Format(scheduling.DateLayout)
+	}
+	return event.EndDate.Format(scheduling.DateLayout)
+}
+func eventContainsWeekday(days []time.Weekday, expected time.Weekday) bool {
+	for _, day := range days {
+		if day == expected {
+			return true
+		}
+	}
+	return false
+}
+func eventAudienceContains(ids []int64, expected int64) bool {
+	for _, id := range ids {
+		if id == expected {
+			return true
+		}
+	}
+	return false
+}
+func eventRuleLabel(rule domain.EventRecurrenceRule) string {
+	switch rule.Type {
+	case domain.EventRuleDaily:
+		return "Daily"
+	case domain.EventRuleEveryNDays:
+		return fmt.Sprintf("Every %d days", rule.Interval)
+	case domain.EventRuleWeeklyDays:
+		return "Weekly"
+	case domain.EventRuleMonthlyDay:
+		return "Monthly"
+	case domain.EventRuleAnnual:
+		return "Yearly"
+	default:
+		return "One-off"
+	}
+}
+func eventDateLabel(event domain.HouseholdEvent) string {
+	if event.AllDay {
+		return event.StartDate.Format("Jan 2, 2006") + " · All day"
+	}
+	return event.StartDate.Format("Jan 2, 2006") + " · " + event.StartTime
+}

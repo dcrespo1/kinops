@@ -1,0 +1,133 @@
+package pages
+
+import (
+	"fmt"
+	"time"
+
+	"github.com/dcrespo1/kinops/internal/domain"
+	"github.com/dcrespo1/kinops/internal/scheduling"
+	"github.com/dcrespo1/kinops/internal/views/components"
+	"github.com/dcrespo1/kinops/internal/views/layouts"
+)
+
+templ Monthly(view domain.MonthView) {
+	@layouts.Base("Monthly · KinOps", monthlyContent(view))
+}
+
+templ monthlyContent(view domain.MonthView) {
+	@components.ViewNavigation("monthly", view.Month)
+	<section class="calendar-header">
+		<div><p class="eyebrow">Monthly view</p><h1>{ view.Month.Format("January 2006") }</h1><p>{ monthlySummary(view) }</p></div>
+		<nav class="date-nav" aria-label="Month navigation">
+			<a class="button secondary" href={ templ.URL("/monthly?month=" + view.Month.AddDate(0, -1, 0).Format("2006-01")) } aria-label="Previous month">←</a>
+			<a class="button secondary" href="/monthly">This month</a>
+			<a class="button secondary" href={ templ.URL("/monthly?month=" + view.Month.AddDate(0, 1, 0).Format("2006-01")) } aria-label="Next month">→</a>
+		</nav>
+	</section>
+	if view.GridEnd.After(view.HorizonEnd) {
+		<p class="horizon-note">Upcoming schedules are generated through { view.HorizonEnd.Format("January 2, 2006") }.</p>
+	}
+	<section class="month-calendar" aria-label={ view.Month.Format("January 2006") }>
+		<div class="month-weekdays">
+			for _, label := range []string{"Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"} {
+				<span>{ label }</span>
+			}
+		</div>
+		for _, week := range view.Weeks {
+			<div class="month-week">
+				for _, day := range week {
+					<a class={ "month-day", templ.KV("outside-month", !day.InMonth), templ.KV("has-overdue", monthDayOverdue(day, view.Today)) } href={ templ.URL("/daily?date=" + day.Date.Format(scheduling.DateLayout)) }>
+						<span class="month-date">{ fmt.Sprint(day.Date.Day()) }</span>
+						if len(day.Events) > 0 {
+							<span class="month-events">
+								for index, event := range day.Events {
+									if index < 2 {
+										<span class="month-event" title={ eventOccurrenceTitle(event, day.Date.Location()) }><span>{ eventOccurrenceTime(event, day.Date.Location()) }</span>{ event.Event.Title }</span>
+									}
+								}
+								if len(day.Events) > 2 {
+									<span class="month-more-events">+{ fmt.Sprint(len(day.Events) - 2) } more</span>
+								}
+							</span>
+						}
+						if len(day.Instances) > 0 {
+							<span class="month-ratio">{ monthDayRatio(day) }</span>
+							<span class="month-dots">
+								for _, summary := range monthPersonSummaries(day) {
+									<span class={ "month-person-dot", "month-person-dot-" + summary.Status } style={ fmt.Sprintf("--person-color: %s", summary.Color) } title={ summary.Label }></span>
+								}
+							</span>
+						} else if len(day.Events) == 0 {
+							<span class="month-empty">No chores</span>
+						}
+					</a>
+				}
+			</div>
+		}
+	</section>
+}
+
+func eventOccurrenceTime(item domain.ScheduledEvent, location *time.Location) string {
+	if item.Event.AllDay || item.Occurrence.StartAt == nil {
+		return "All day"
+	}
+	return item.Occurrence.StartAt.In(location).Format("3:04 PM")
+}
+
+func eventOccurrenceTitle(item domain.ScheduledEvent, location *time.Location) string {
+	return eventOccurrenceTime(item, location) + " · " + item.Event.Title
+}
+
+type monthPersonSummary struct{ Color, Status, Label string }
+
+func monthDayRatio(day domain.MonthDay) string {
+	done := 0
+	for _, item := range day.Instances {
+		if item.Instance.Status == domain.InstanceDone {
+			done++
+		}
+	}
+	return fmt.Sprintf("%d/%d done", done, len(day.Instances))
+}
+
+func monthDayOverdue(day domain.MonthDay, today time.Time) bool {
+	for _, item := range day.Instances {
+		if item.Instance.Status == domain.InstancePending && item.Instance.DueDate.Format(scheduling.DateLayout) < today.Format(scheduling.DateLayout) {
+			return true
+		}
+	}
+	return false
+}
+
+func monthPersonSummaries(day domain.MonthDay) []monthPersonSummary {
+	result := make([]monthPersonSummary, 0, len(day.Instances))
+	for _, item := range day.Instances {
+		status := string(item.Instance.Status)
+		result = append(result, monthPersonSummary{Color: item.Assignee.Color, Status: status, Label: item.Assignee.Name + ": " + item.Chore.Name + " (" + status + ")"})
+	}
+	return result
+}
+
+func monthlySummary(view domain.MonthView) string {
+	total, done := 0, 0
+	eventIDs := map[int64]bool{}
+	for _, week := range view.Weeks {
+		for _, day := range week {
+			if day.InMonth {
+				for _, event := range day.Events {
+					eventIDs[event.Occurrence.ID] = true
+				}
+				for _, item := range day.Instances {
+					total++
+					if item.Instance.Status == domain.InstanceDone {
+						done++
+					}
+				}
+			}
+		}
+	}
+	if total == 0 && len(eventIDs) == 0 {
+		return "No chores or events scheduled this month."
+	}
+	return fmt.Sprintf("%d chores · %d complete · %d events", total, done, len(eventIDs))
+}

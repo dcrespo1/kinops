@@ -1,0 +1,29 @@
+package components
+
+import (
+	"fmt"
+	"time"
+
+	"github.com/dcrespo1/kinops/internal/domain"
+	"github.com/dcrespo1/kinops/internal/scheduling"
+)
+
+templ CalendarTask(item domain.ScheduledInstance, selectedDate time.Time) {
+	<a
+		class={ "calendar-task", statusClass(item.Instance.Status), templ.KV("calendar-task-overdue", item.Instance.Status == domain.InstancePending && item.Instance.DueDate.Format(scheduling.DateLayout) < selectedDate.Format(scheduling.DateLayout)) }
+		href={ templ.URL("/daily?date=" + item.Instance.DueDate.Format(scheduling.DateLayout)) }
+		title={ fmt.Sprintf("%s · %s · %s", item.Chore.Name, item.Assignee.Name, item.Instance.Status) }
+	>
+		<span class="calendar-status-dot" style={ fmt.Sprintf("--person-color: %s", item.Assignee.Color) }></span>
+		<span>{ item.Chore.Name }</span>
+		if item.Instance.Status == domain.InstanceDone {
+			<span aria-label="Done">✓</span>
+		} else if item.Instance.Status == domain.InstanceSkipped {
+			<span aria-label="Skipped">—</span>
+		}
+	</a>
+}
+
+func statusClass(status domain.InstanceStatus) string {
+	return "calendar-task-" + string(status)
+}

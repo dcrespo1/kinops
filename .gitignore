@@ -1,0 +1,8 @@
+/bin/
+/tmp/
+/coverage/
+/data/*
+!/data/.gitkeep
+.env
+.envrc
+

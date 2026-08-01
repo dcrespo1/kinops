@@ -1,0 +1,146 @@
+package pages
+
+import (
+	"fmt"
+	"strings"
+	"time"
+
+	"github.com/dcrespo1/kinops/internal/domain"
+	"github.com/dcrespo1/kinops/internal/scheduling"
+	"github.com/dcrespo1/kinops/internal/views/components"
+	"github.com/dcrespo1/kinops/internal/views/layouts"
+)
+
+templ Daily(view domain.DailyView) {
+	@layouts.Base("Today · KinOps", dailyContent(view))
+}
+
+templ dailyContent(view domain.DailyView) {
+	@components.ViewNavigation("daily", view.Date)
+	<section class="daily-header">
+		<div>
+			<p class="eyebrow">Daily view</p>
+			<h1>{ view.Date.Format("Monday, January 2") }</h1>
+			<p id="daily-summary">{ dailySummary(view) }</p>
+		</div>
+		<nav class="date-nav" aria-label="Day navigation">
+			<a class="button secondary" href={ templ.URL("/daily?date=" + view.Date.AddDate(0, 0, -1).Format(scheduling.DateLayout)) } aria-label="Previous day">←</a>
+			<a class="button secondary" href="/daily">Today</a>
+			<a class="button secondary" href={ templ.URL("/daily?date=" + view.Date.AddDate(0, 0, 1).Format(scheduling.DateLayout)) } aria-label="Next day">→</a>
+		</nav>
+	</section>
+	<section class="agenda-section" aria-labelledby="agenda-heading">
+		<div class="section-heading"><div><p class="eyebrow">Family agenda</p><h2 id="agenda-heading">Events</h2></div><a href={ templ.URL("/events/new?date=" + view.Date.Format(scheduling.DateLayout)) }>Add event</a></div>
+		if len(view.Events) == 0 {
+			<div class="agenda-empty"><p>No events on the agenda.</p></div>
+		} else {
+			<div class="agenda-list">
+				for _, item := range view.Events {
+					<article class="agenda-event">
+						<time>{ eventTimeLabel(item, view.Date.Location()) }</time>
+						<div>
+							<h3>{ item.Event.Title }</h3>
+							if item.Event.Location != "" {
+								<p>{ item.Event.Location }</p>
+							}
+							<p class="agenda-audience">{ eventAudienceLabel(item) }</p>
+						</div>
+					</article>
+				}
+			</div>
+		}
+	</section>
+	if len(view.People) == 0 {
+		<section class="empty setup-empty">
+			<h2>Set up your household</h2>
+			<p>Add the household members who will share chores before building the daily list.</p>
+			<a class="button" href="/people">Add people</a>
+		</section>
+	} else {
+		if overdueCount(view) > 0 {
+			<section class="overdue-section">
+				<div class="section-heading"><div><p class="eyebrow urgent">Needs attention</p><h2>Overdue</h2></div><span class="count-badge">{ fmt.Sprint(overdueCount(view)) }</span></div>
+				<div class="task-list overdue-list">
+					for _, day := range view.People {
+						for _, item := range day.Overdue {
+							@components.InstanceCard(item, view.Date)
+						}
+					}
+				</div>
+			</section>
+		}
+		<section class="today-section">
+			<div class="section-heading"><div><p class="eyebrow">Assignments</p><h2>Today</h2></div></div>
+			<div class="person-columns">
+				for _, day := range view.People {
+					<section class="person-column" style={ fmt.Sprintf("--person-color: %s", day.Person.Color) }>
+						<header class="person-heading"><span class="person-swatch"></span><h2>{ day.Person.Name }</h2><span id={ fmt.Sprintf("person-progress-%d", day.Person.ID) }>{ personProgress(day) }</span></header>
+						<div class="task-list">
+							if len(day.Today) == 0 {
+								<div class="person-empty"><span aria-hidden="true">☀</span><p>Nothing scheduled.</p></div>
+							}
+							for _, item := range day.Today {
+								@components.InstanceCard(item, view.Date)
+							}
+						</div>
+					</section>
+				}
+			</div>
+		</section>
+	}
+}
+
+func eventTimeLabel(item domain.ScheduledEvent, location *time.Location) string {
+	if item.Event.AllDay || item.Occurrence.StartAt == nil || item.Occurrence.EndAt == nil {
+		return "All day"
+	}
+	return item.Occurrence.StartAt.In(location).Format("3:04 PM") + "–" + item.Occurrence.EndAt.In(location).Format("3:04 PM")
+}
+
+func eventAudienceLabel(item domain.ScheduledEvent) string {
+	if len(item.Audience) == 0 {
+		return "Everyone"
+	}
+	names := make([]string, 0, len(item.Audience))
+	for _, person := range item.Audience {
+		names = append(names, person.Name)
+	}
+	return strings.Join(names, " & ")
+}
+
+func overdueCount(view domain.DailyView) int {
+	total := 0
+	for _, day := range view.People {
+		total += len(day.Overdue)
+	}
+	return total
+}
+
+func dailySummary(view domain.DailyView) string {
+	total, done := 0, 0
+	for _, day := range view.People {
+		for _, item := range day.Today {
+			total++
+			if item.Instance.Status == domain.InstanceDone {
+				done++
+			}
+		}
+	}
+	if total == 0 {
+		return "No chores scheduled for this day."
+	}
+	if done == total {
+		return "Everything scheduled is done."
+	}
+	return fmt.Sprintf("%d of %d chores complete", done, total)
+}
+
+func personProgress(day domain.PersonDay) string {
+	done := 0
+	for _, item := range day.Today {
+		if item.Instance.Status == domain.InstanceDone {
+			done++
+		}
+	}
+	return fmt.Sprintf("%d/%d done", done, len(day.Today))
+}

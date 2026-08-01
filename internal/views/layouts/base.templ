@@ -1,0 +1,29 @@
+package layouts
+
+templ Base(title string, content templ.Component) {
+	<!DOCTYPE html>
+	<html lang="en">
+		<head>
+			<meta charset="utf-8"/>
+			<meta name="viewport" content="width=device-width, initial-scale=1"/>
+			<title>{ title }</title>
+			<link rel="stylesheet" href="/static/css/app.css"/>
+			<script defer src="/static/js/htmx.min.js"></script>
+			<script defer src="/static/js/alpine.min.js"></script>
+		</head>
+		<body>
+			<header>
+				<nav>
+					<a href="/">KinOps</a>
+					<a href="/chores">Manage chores</a>
+					<a href="/events">Events</a>
+					<a href="/people">People</a>
+					<a href="/admin">Admin</a>
+				</nav>
+			</header>
+			<main id="main-content" hx-boost="true">
+				@content
+			</main>
+		</body>
+	</html>
+}

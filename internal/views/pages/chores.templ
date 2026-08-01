@@ -1,0 +1,270 @@
+package pages
+
+import (
+	"fmt"
+	"time"
+
+	"github.com/dcrespo1/kinops/internal/domain"
+	"github.com/dcrespo1/kinops/internal/scheduling"
+	"github.com/dcrespo1/kinops/internal/views/layouts"
+)
+
+type ChoreFormData struct {
+	Chore domain.Chore
+	Error string
+	Edit  bool
+}
+
+type ScheduleFormData struct {
+	Schedule domain.Schedule
+	People   []domain.Person
+	Error    string
+	Edit     bool
+}
+
+func dateValue(value time.Time) string {
+	if value.IsZero() {
+		return ""
+	}
+	return value.Format(scheduling.DateLayout)
+}
+
+func endDateValue(value *time.Time) string {
+	if value == nil {
+		return ""
+	}
+	return dateValue(*value)
+}
+
+func selected(value, expected fmt.Stringer) bool { return value.String() == expected.String() }
+
+templ Chores(chores []domain.Chore) {
+	@layouts.Base("Chores · KinOps", choresContent(chores))
+}
+
+templ choresContent(chores []domain.Chore) {
+	<section class="page-header">
+		<div><h1>Chores</h1><p>Create chores and choose who should do them.</p></div>
+		<a class="button" href="/chores/new">New chore</a>
+	</section>
+	if len(chores) == 0 {
+		<section class="empty">
+			<p>No chores yet.</p>
+			<a href="/chores/new">Create the first chore</a>
+		</section>
+	}
+	if len(chores) > 0 {
+		<section class="cards">
+			for _, chore := range chores {
+				<article class="card" id={ fmt.Sprintf("chore-%d", chore.ID) }>
+					<h2><a href={ templ.URL(fmt.Sprintf("/chores/%d", chore.ID)) }>{ chore.Name }</a></h2>
+					if chore.Category != "" {
+						<p class="category">{ chore.Category }</p>
+					}
+					if chore.Description != "" {
+						<p>{ chore.Description }</p>
+					}
+				</article>
+			}
+		</section>
+	}
+}
+
+templ ChoreForm(data ChoreFormData) {
+	@layouts.Base("Chore · KinOps", choreFormContent(data))
+}
+
+templ choreFormContent(data ChoreFormData) {
+	<section class="narrow">
+		if data.Edit {
+			<h1>Edit chore</h1>
+		} else {
+			<h1>New chore</h1>
+		}
+		if data.Error != "" {
+			<p class="error" role="alert">{ data.Error }</p>
+		}
+		<form method="post" action={ templ.URL(ifThen(data.Edit, fmt.Sprintf("/chores/%d", data.Chore.ID), "/chores")) }>
+			if data.Edit {
+				<input type="hidden" name="_method" value="put"/>
+			}
+			<label>Name<input name="name" required maxlength="200" value={ data.Chore.Name }/></label>
+			<label>Category<input name="category" value={ data.Chore.Category }/></label>
+			<label>Description<textarea name="description" rows="4">{ data.Chore.Description }</textarea></label>
+			<div class="actions"><button type="submit">Save chore</button><a href="/chores">Cancel</a></div>
+		</form>
+	</section>
+}
+
+templ ChoreDetail(chore domain.Chore, schedules []domain.Schedule, people []domain.Person) {
+	@layouts.Base(chore.Name+" · KinOps", choreDetailContent(chore, schedules, people))
+}
+
+templ choreDetailContent(chore domain.Chore, schedules []domain.Schedule, people []domain.Person) {
+	<section class="page-header">
+		<div><h1>{ chore.Name }</h1><p>{ chore.Description }</p></div>
+		<div class="actions"><a class="button secondary" href={ templ.URL(fmt.Sprintf("/chores/%d/edit", chore.ID)) }>Edit</a><a class="button" href={ templ.URL(fmt.Sprintf("/chores/%d/schedules/new", chore.ID)) }>Add schedule</a></div>
+	</section>
+	<section>
+		<h2>Schedules</h2>
+		if len(schedules) == 0 {
+			<p>No active schedules.</p>
+		}
+		for _, schedule := range schedules {
+			<article class="card schedule-card">
+				<div><strong>{ ruleLabel(schedule.Rule) }</strong><p>{ assignmentLabel(schedule, people) }</p></div>
+				<div class="actions"><a href={ templ.URL(fmt.Sprintf("/schedules/%d/edit", schedule.ID)) }>Edit</a><form method="post" action={ templ.URL(fmt.Sprintf("/schedules/%d", schedule.ID)) } hx-confirm="Archive this schedule and remove pending future occurrences?"><input type="hidden" name="_method" value="delete"/><button class="link danger" type="submit">Archive</button></form></div>
+			</article>
+		}
+	</section>
+	<form method="post" action={ templ.URL(fmt.Sprintf("/chores/%d", chore.ID)) } hx-confirm="Archive this chore and its active schedules?"><input type="hidden" name="_method" value="delete"/><button class="danger" type="submit">Archive chore</button></form>
+}
+
+templ ScheduleForm(data ScheduleFormData) {
+	@layouts.Base("Schedule · KinOps", scheduleFormContent(data))
+}
+
+templ scheduleFormContent(data ScheduleFormData) {
+	<section class="narrow" x-data="{ rule: $refs.rule.value, assignment: $refs.assignment.value }">
+		if data.Edit {
+			<h1>Edit schedule</h1>
+		} else {
+			<h1>New schedule</h1>
+		}
+		if data.Error != "" {
+			<p class="error" role="alert">{ data.Error }</p>
+		}
+		if len(data.People) == 0 {
+			<p class="error">Add people before creating a schedule. <a href="/people">Set up people</a>.</p>
+		}
+		<form method="post" action={ templ.URL(ifThen(data.Edit, fmt.Sprintf("/schedules/%d", data.Schedule.ID), fmt.Sprintf("/chores/%d/schedules", data.Schedule.ChoreID))) }>
+			if data.Edit {
+				<input type="hidden" name="_method" value="put"/>
+			}
+			<label>
+				Repeats
+				<select name="rule_type" x-ref="rule" x-on:change="rule = $event.target.value">
+					<option value="daily" selected?={ data.Schedule.Rule.Type == domain.RuleDaily }>Daily</option>
+					<option value="every_n_days" selected?={ data.Schedule.Rule.Type == domain.RuleEveryNDays }>Every N days</option>
+					<option value="weekly_days" selected?={ data.Schedule.Rule.Type == domain.RuleWeeklyDays }>Specific weekdays</option>
+					<option value="monthly_day" selected?={ data.Schedule.Rule.Type == domain.RuleMonthlyDay }>Monthly day</option>
+					<option value="one_off" selected?={ data.Schedule.Rule.Type == domain.RuleOneOff }>One-off</option>
+				</select>
+			</label>
+			<div x-show="rule === 'every_n_days'"><label>Every how many days?<input type="number" min="1" max="3650" name="interval" required value={ positiveNumberValue(data.Schedule.Rule.Interval) } disabled?={ data.Schedule.Rule.Type != domain.RuleEveryNDays } x-bind:disabled="rule !== 'every_n_days'"/></label></div>
+			<fieldset x-show="rule === 'weekly_days'" disabled?={ data.Schedule.Rule.Type != domain.RuleWeeklyDays } x-bind:disabled="rule !== 'weekly_days'">
+				<legend>Weekdays</legend>
+				for day := 1; day <= 7; day++ {
+					<label class="check"><input type="checkbox" name="weekdays" value={ fmt.Sprint(day) } checked?={ containsWeekday(data.Schedule.Rule.Weekdays, day) }/>{ weekdayLabel(day) }</label>
+				}
+			</fieldset>
+			<div x-show="rule === 'monthly_day'"><label>Day of month<input type="number" min="1" max="31" name="day" required value={ positiveNumberValue(data.Schedule.Rule.DayOfMonth) } disabled?={ data.Schedule.Rule.Type != domain.RuleMonthlyDay } x-bind:disabled="rule !== 'monthly_day'"/></label></div>
+			<label>Start date<input type="date" required name="start_date" value={ dateValue(data.Schedule.StartDate) }/></label>
+			<label>End date (optional)<input type="date" name="end_date" value={ endDateValue(data.Schedule.EndDate) }/></label>
+			<label>Assignment<select name="assignment_mode" x-ref="assignment" x-on:change="assignment = $event.target.value"><option value="fixed" selected?={ data.Schedule.AssignmentMode == domain.AssignmentFixed }>Always assign to one person</option><option value="rotate" selected?={ data.Schedule.AssignmentMode == domain.AssignmentRotate }>Rotate between people</option></select></label>
+			<div x-show="assignment === 'fixed'">
+				<label>
+					Always assign to
+					<select name="fixed_person_id" required disabled?={ data.Schedule.AssignmentMode != domain.AssignmentFixed } x-bind:disabled="assignment !== 'fixed'">
+						<option value="">Choose a person</option>@personOptions(data.People, data.Schedule.FixedPersonID)
+					</select>
+				</label>
+			</div>
+			<div x-show="assignment === 'rotate'">
+				<label>
+					First occurrence goes to
+					<select name="rotation_start_person_id" required disabled?={ data.Schedule.AssignmentMode != domain.AssignmentRotate } x-bind:disabled="assignment !== 'rotate'">
+						<option value="">Choose a person</option>@personOptions(data.People, data.Schedule.RotationStartPersonID)
+					</select>
+				</label>
+			</div>
+			<div class="actions"><button type="submit" disabled?={ len(data.People) == 0 }>Save schedule</button><a href={ templ.URL(fmt.Sprintf("/chores/%d", data.Schedule.ChoreID)) }>Cancel</a></div>
+		</form>
+	</section>
+}
+
+templ personOptions(people []domain.Person, selected *int64) {
+	for _, person := range people {
+		<option value={ fmt.Sprint(person.ID) } selected?={ selected != nil && *selected == person.ID }>{ person.Name }</option>
+	}
+}
+
+templ People(people []domain.Person, errorMessage string) {
+	@layouts.Base("People · KinOps", peopleContent(people, errorMessage))
+}
+
+templ peopleContent(people []domain.Person, errorMessage string) {
+	<section class="page-header"><div><h1>People</h1><p>Add the household members who can receive chores.</p></div></section>
+	if errorMessage != "" {
+		<p class="error">{ errorMessage }</p>
+	}
+	<section class="people-grid">
+		<div>
+			for _, person := range people {
+				<article class="card"><span class="color" style={ fmt.Sprintf("background:%s", person.Color) }></span><strong>{ person.Name }</strong></article>
+			}
+		</div>
+		<form method="post" action="/people"><h2>Add person</h2><label>Name<input name="name" required/></label><label>Color<input name="color" type="color" value="#4f46e5" required/></label><button type="submit">Add person</button></form>
+	</section>
+}
+
+func ifThen(condition bool, yes, no string) string {
+	if condition {
+		return yes
+	}
+	return no
+}
+
+func positiveNumberValue(value int) string {
+	if value <= 0 {
+		return ""
+	}
+	return fmt.Sprint(value)
+}
+func containsWeekday(days []time.Weekday, iso int) bool {
+	for _, day := range days {
+		value := int(day)
+		if day == time.Sunday {
+			value = 7
+		}
+		if value == iso {
+			return true
+		}
+	}
+	return false
+}
+func weekdayLabel(day int) string {
+	return []string{"", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"}[day]
+}
+func ruleLabel(rule domain.RecurrenceRule) string {
+	switch rule.Type {
+	case domain.RuleDaily:
+		return "Daily"
+	case domain.RuleEveryNDays:
+		return fmt.Sprintf("Every %d days", rule.Interval)
+	case domain.RuleWeeklyDays:
+		return "Selected weekdays"
+	case domain.RuleMonthlyDay:
+		return fmt.Sprintf("Monthly on day %d", rule.DayOfMonth)
+	case domain.RuleOneOff:
+		return "One-off"
+	}
+	return string(rule.Type)
+}
+func personName(people []domain.Person, id int64) string {
+	for _, person := range people {
+		if person.ID == id {
+			return person.Name
+		}
+	}
+	return "Unknown person"
+}
+func assignmentLabel(schedule domain.Schedule, people []domain.Person) string {
+	if schedule.AssignmentMode == domain.AssignmentFixed && schedule.FixedPersonID != nil {
+		return "Always assigned to " + personName(people, *schedule.FixedPersonID)
+	}
+	if schedule.RotationStartPersonID != nil {
+		return "Rotates strictly per occurrence, starting with " + personName(people, *schedule.RotationStartPersonID)
+	}
+	return "Rotates strictly per occurrence"
+}
