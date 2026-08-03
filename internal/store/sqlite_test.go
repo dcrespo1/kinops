@@ -149,3 +149,27 @@ func TestSQLiteCalendarFeedQueriesAreActivePersonScopedAndInclusive(t *testing.T
 		t.Errorf("unknown token lookup error = %v", err)
 	}
 }
+
+func TestSQLiteHouseholdSettingsDefaultAndUpdate(t *testing.T) {
+	db := testutil.NewTestDatabase(t)
+	repository := NewSQLite(db)
+	ctx := context.Background()
+
+	settings, err := repository.GetHouseholdSettings(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if settings.HouseholdEventColor != "#a78bfa" {
+		t.Fatalf("default household event color = %q", settings.HouseholdEventColor)
+	}
+	if err := repository.UpdateHouseholdEventColor(ctx, "#0ea5e9"); err != nil {
+		t.Fatal(err)
+	}
+	settings, err = repository.GetHouseholdSettings(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if settings.HouseholdEventColor != "#0ea5e9" {
+		t.Errorf("updated household event color = %q", settings.HouseholdEventColor)
+	}
+}

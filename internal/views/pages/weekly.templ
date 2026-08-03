@@ -44,7 +44,7 @@ templ weeklyContent(view domain.WeekView) {
 				for _, day := range view.EventDays {
 					<div class="week-cell week-event-cell">
 						for _, event := range day.Events {
-							<a class="week-event" href={ templ.URL("/daily?date=" + day.Date.Format(scheduling.DateLayout)) } title={ eventOccurrenceTitle(event, day.Date.Location()) }><span>{ eventOccurrenceTime(event, day.Date.Location()) }</span>{ event.Event.Title }</a>
+							<a class="week-event" style={ eventColorStyle(event) } href={ templ.URL("/daily?date=" + day.Date.Format(scheduling.DateLayout)) } title={ eventOccurrenceTitle(event, day.Date.Location()) }><span>{ eventOccurrenceTime(event, day.Date.Location()) }</span>{ event.Event.Title }</a>
 						}
 						if len(day.Events) == 0 {
 							<span class="week-empty">—</span>
@@ -77,7 +77,7 @@ templ weeklyContent(view domain.WeekView) {
 							<strong>Events</strong>
 							<div>
 								for _, event := range view.EventDays[dayIndex].Events {
-									<a class="week-event" href={ templ.URL("/daily?date=" + view.EventDays[dayIndex].Date.Format(scheduling.DateLayout)) }><span>{ eventOccurrenceTime(event, view.EventDays[dayIndex].Date.Location()) }</span>{ event.Event.Title }</a>
+									<a class="week-event" style={ eventColorStyle(event) } href={ templ.URL("/daily?date=" + view.EventDays[dayIndex].Date.Format(scheduling.DateLayout)) }><span>{ eventOccurrenceTime(event, view.EventDays[dayIndex].Date.Location()) }</span>{ event.Event.Title }</a>
 								}
 							</div>
 						</div>

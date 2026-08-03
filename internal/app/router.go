@@ -25,6 +25,8 @@ type Dependencies struct {
 	CalendarService     handlers.CalendarService
 	CalendarFeedService handlers.CalendarFeedService
 	AdminService        handlers.AdminService
+	KitchenService      handlers.KitchenService
+	MealieStatusService handlers.MealieStatusService
 	AdminAuth           *auth.Manager
 }
 
@@ -85,6 +87,7 @@ func NewRouter(deps Dependencies) http.Handler {
 		}
 	}
 	calendarFeed := handlers.NewCalendarFeedHandler(calendarFeedService, deps.Logger)
+	kitchenHandler := handlers.NewKitchenHandler(deps.KitchenService, deps.Logger, location)
 	var admin *handlers.AdminHandler
 	if deps.AdminAuth != nil {
 		adminService := deps.AdminService
@@ -95,7 +98,7 @@ func NewRouter(deps Dependencies) http.Handler {
 				adminService = service.New(store.NewSQLite(deps.DB), location)
 			}
 		}
-		admin = handlers.NewAdminHandler(adminService, deps.AdminAuth, deps.Logger)
+		admin = handlers.NewAdminHandler(adminService, deps.AdminAuth, deps.Logger, deps.MealieStatusService)
 	}
 
 	router.Get("/healthz", health.Get)
@@ -104,6 +107,22 @@ func NewRouter(deps Dependencies) http.Handler {
 	router.Get("/weekly", calendar.Weekly)
 	router.Get("/monthly", calendar.Monthly)
 	router.Get("/calendar/{personToken}.ics", calendarFeed.Get)
+	router.Get("/kitchen", kitchenHandler.Root)
+	router.Get("/kitchen/daily", kitchenHandler.Daily)
+	router.Get("/kitchen/weekly", kitchenHandler.Weekly)
+	router.Get("/kitchen/recipes", kitchenHandler.Recipes)
+	router.Post("/kitchen/recipes/{recipeSlug}/favorite", kitchenHandler.Favorite)
+	router.Delete("/kitchen/recipes/{recipeSlug}/favorite", kitchenHandler.Favorite)
+	router.Post("/kitchen/meals", kitchenHandler.MealCreate)
+	router.Post("/kitchen/meals/{mealID}", kitchenHandler.MealMutate)
+	router.Put("/kitchen/meals/{mealID}", kitchenHandler.MealUpdate)
+	router.Delete("/kitchen/meals/{mealID}", kitchenHandler.MealDelete)
+	router.Get("/kitchen/groceries", kitchenHandler.Groceries)
+	router.Post("/kitchen/groceries/items", kitchenHandler.GroceryCreate)
+	router.Post("/kitchen/groceries/items/{itemID}", kitchenHandler.GroceryMutate)
+	router.Put("/kitchen/groceries/items/{itemID}", kitchenHandler.GroceryUpdate)
+	router.Patch("/kitchen/groceries/items/{itemID}", kitchenHandler.GroceryUpdate)
+	router.Delete("/kitchen/groceries/items/{itemID}", kitchenHandler.GroceryDelete)
 	router.Patch("/instances/{instanceID}/complete", daily.Complete)
 	router.Post("/instances/{instanceID}/complete", daily.Complete)
 	router.Patch("/instances/{instanceID}/reopen", daily.Reopen)
@@ -124,6 +143,7 @@ func NewRouter(deps Dependencies) http.Handler {
 	router.Delete("/schedules/{scheduleID}", management.ScheduleDelete)
 	router.Get("/people", management.PeopleIndex)
 	router.Post("/people", management.PersonCreate)
+	router.Post("/people/household-event-color", management.HouseholdEventColorUpdate)
 	router.Get("/events", events.Index)
 	router.Get("/events/new", events.New)
 	router.Post("/events", events.Create)

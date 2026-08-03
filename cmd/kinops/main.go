@@ -18,8 +18,11 @@ import (
 	"github.com/dcrespo1/kinops/internal/auth"
 	"github.com/dcrespo1/kinops/internal/config"
 	"github.com/dcrespo1/kinops/internal/database"
+	"github.com/dcrespo1/kinops/internal/kitchen"
+	"github.com/dcrespo1/kinops/internal/mealie"
 	"github.com/dcrespo1/kinops/internal/service"
 	"github.com/dcrespo1/kinops/internal/store"
+	"github.com/go-chi/chi/v5/middleware"
 )
 
 func main() {
@@ -73,6 +76,21 @@ func main() {
 			os.Exit(1)
 		}
 	}
+	var kitchenService *kitchen.Service
+	if cfg.MealieEnabled() {
+		mealieClient, clientErr := mealie.NewClient(mealie.Options{
+			BaseURL:    cfg.MealieBaseURL,
+			Token:      cfg.MealieAPIToken,
+			HTTPClient: &http.Client{Timeout: cfg.MealieTimeout},
+			Logger:     logger,
+			RequestID:  middleware.GetReqID,
+		})
+		if clientErr != nil {
+			logger.Error("configure Mealie client", "error", clientErr)
+			os.Exit(1)
+		}
+		kitchenService = kitchen.New(mealieClient, cfg.Location, cfg.MealiePublicURL, cfg.MealieDefaultList)
+	}
 
 	router := app.NewRouter(app.Dependencies{
 		DB:                  db,
@@ -83,6 +101,8 @@ func main() {
 		CalendarService:     managementService,
 		CalendarFeedService: managementService,
 		AdminService:        managementService,
+		KitchenService:      kitchenService,
+		MealieStatusService: kitchenService,
 		AdminAuth:           adminAuth,
 	})
 

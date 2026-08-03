@@ -36,7 +36,7 @@ templ dailyContent(view domain.DailyView) {
 		} else {
 			<div class="agenda-list">
 				for _, item := range view.Events {
-					<article class="agenda-event">
+					<article class="agenda-event" style={ eventColorStyle(item) }>
 						<time>{ eventTimeLabel(item, view.Date.Location()) }</time>
 						<div>
 							<h3>{ item.Event.Title }</h3>
@@ -106,6 +106,14 @@ func eventAudienceLabel(item domain.ScheduledEvent) string {
 		names = append(names, person.Name)
 	}
 	return strings.Join(names, " & ")
+}
+
+func eventColorStyle(item domain.ScheduledEvent) string {
+	color := item.Color
+	if color == "" {
+		color = "#a78bfa"
+	}
+	return fmt.Sprintf("--event-color: %s", color)
 }
 
 func overdueCount(view domain.DailyView) int {

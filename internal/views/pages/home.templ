@@ -7,9 +7,10 @@ templ Home() {
 }
 
 templ homeContent() {
-	<section>
+	<section class="empty empty-state home-state">
+		<span class="empty-icon" aria-hidden="true">⌂</span>
 		<h1>KinOps</h1>
 		<p>Your household operations hub is running.</p>
-		<p><a class="button" href="/chores">Manage chores</a></p>
+		<div class="actions"><a class="button" href="/daily">View today</a><a class="button secondary" href="/chores">Manage chores</a></div>
 	</section>
 }

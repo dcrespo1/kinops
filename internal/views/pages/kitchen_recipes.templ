@@ -1,0 +1,171 @@
+package pages
+
+import (
+	"fmt"
+	"net/url"
+	"strconv"
+
+	"github.com/dcrespo1/kinops/internal/domain"
+	"github.com/dcrespo1/kinops/internal/scheduling"
+	"github.com/dcrespo1/kinops/internal/views/components"
+	"github.com/dcrespo1/kinops/internal/views/layouts"
+)
+
+templ KitchenRecipes(view domain.KitchenRecipeView) {
+	@layouts.Base("Kitchen recipes · KinOps", kitchenRecipesContent(view))
+}
+
+templ kitchenRecipesContent(view domain.KitchenRecipeView) {
+	@components.KitchenNavigation("recipes", view.SelectedDate)
+	<section class="page-header kitchen-recipe-header">
+		<div><p class="eyebrow">Kitchen recipes</p><h1>Choose what’s cooking</h1><p>Scheduling for { view.SelectedDate.Format("Monday, January 2") }.</p></div>
+	</section>
+	@kitchenState(view.State, view.Message)
+	@kitchenStale(view.Stale, view.StaleMessage)
+	if view.State == domain.KitchenReady {
+		<form id="recipe-search" class="recipe-search" method="get" action="/kitchen/recipes" hx-get="/kitchen/recipes" hx-target="#recipe-results" hx-push-url="true" hx-trigger="submit, input changed delay:300ms from:input[name='q'], change from:select, change from:input[name='favorites']">
+			<input type="hidden" name="date" value={ view.SelectedDate.Format(scheduling.DateLayout) }/>
+			<label>Search <input type="search" name="q" maxlength="100" value={ view.Search } placeholder="Search recipes…" autocomplete="off"/></label>
+			<label>Meal <select name="entry_type">@mealTypeOptions(view.SelectedType)
+</select></label>
+			<label class="check"><input type="checkbox" name="favorites" value="1" checked?={ view.FavoritesOnly }/> Favorites only</label>
+			<noscript><button type="submit">Search</button></noscript>
+		</form>
+		<section class="recipe-note-form">
+			<h2>Add a meal note</h2>
+			<form method="post" action="/kitchen/meals" hx-post="/kitchen/meals" hx-target="#note-meal-result" hx-swap="innerHTML">
+				<input type="hidden" name="date" value={ view.SelectedDate.Format(scheduling.DateLayout) }/>
+				<input type="hidden" name="return_to" value={ recipeReturnURL(view) }/>
+				<label>Meal <select name="entry_type">@mealTypeOptions(view.SelectedType)
+</select></label>
+				<label>Title <input name="title" maxlength="200" placeholder="Dinner out" required/></label>
+				<label>Details <input name="text" maxlength="4000" placeholder="Optional details"/></label>
+				<button type="submit">Add note</button>
+			</form>
+			<div id="note-meal-result" aria-live="polite"></div>
+		</section>
+		@KitchenRecipeResults(view)
+	}
+}
+
+templ KitchenRecipeResults(view domain.KitchenRecipeView) {
+	<section id="recipe-results" aria-live="polite">
+		<div class="section-heading"><h2>Recipes</h2><span>{ fmt.Sprintf("%d found", view.Total) }</span></div>
+		if len(view.Recipes) == 0 {
+			<div class="empty"><h3>No recipes found</h3><p>Try another search or add recipes in Mealie.</p></div>
+		}
+		<div class="recipe-grid">
+			for _, recipe := range view.Recipes {
+				@KitchenRecipeCard(recipe, view)
+			}
+		</div>
+		if view.TotalPages > 1 {
+			<nav class="recipe-pagination" aria-label="Recipe pages">
+				if view.Page > 1 {
+					<a class="button secondary" href={ templ.URL(recipePageURL(view, view.Page-1)) } hx-get={ recipePageURL(view, view.Page-1) } hx-target="#recipe-results" hx-push-url="true">Previous</a>
+				}
+				<span>Page { strconv.Itoa(view.Page) } of { strconv.Itoa(view.TotalPages) }</span>
+				if view.Page < view.TotalPages {
+					<a class="button secondary" href={ templ.URL(recipePageURL(view, view.Page+1)) } hx-get={ recipePageURL(view, view.Page+1) } hx-target="#recipe-results" hx-push-url="true">Next</a>
+				}
+			</nav>
+		}
+	</section>
+}
+
+templ KitchenRecipeCard(recipe domain.KitchenRecipeCard, view domain.KitchenRecipeView) {
+	<article class="recipe-card">
+		if recipe.ImageURL != "" {
+			<img src={ templ.URL(recipe.ImageURL) } alt="" loading="lazy"/>
+		}
+		<div class="recipe-card-copy">
+			<div class="recipe-card-title"><h3>{ recipe.Name }</h3>@KitchenFavoriteControl(recipe.Slug, recipe.Favorite, recipeReturnURL(view), "")
+</div>
+			if len(recipe.Categories) > 0 {
+				<p class="recipe-categories">{ recipe.Categories[0] }</p>
+			}
+			<p class="recipe-meta">{ recipeTimeSummary(recipe) }{ recipeRatingSummary(recipe) }</p>
+			<div class="actions">
+				if recipe.MealieURL != "" {
+					<a href={ templ.URL(recipe.MealieURL) } target="_blank" rel="noreferrer">Open in Mealie ↗</a>
+				}
+				<form method="post" action="/kitchen/meals" hx-post="/kitchen/meals" hx-target={ "#schedule-result-" + recipe.ID } hx-swap="innerHTML">
+					<input type="hidden" name="date" value={ view.SelectedDate.Format(scheduling.DateLayout) }/>
+					<input type="hidden" name="entry_type" value={ view.SelectedType }/>
+					<input type="hidden" name="recipe_id" value={ recipe.ID }/>
+					<input type="hidden" name="return_to" value={ recipeReturnURL(view) }/>
+					<button type="submit">Schedule</button>
+				</form>
+			</div>
+			<div id={ "schedule-result-" + recipe.ID } aria-live="polite"></div>
+		</div>
+	</article>
+}
+
+templ KitchenFavoriteControl(slug string, favorite bool, returnTo string, errorMessage string) {
+	<form class="favorite-control" method="post" action={ templ.URL("/kitchen/recipes/" + slug + "/favorite") } hx-post={ "/kitchen/recipes/" + slug + "/favorite" } hx-target="this" hx-swap="outerHTML">
+		if favorite {
+			<input type="hidden" name="_method" value="DELETE"/>
+		}
+		<input type="hidden" name="return_to" value={ returnTo }/>
+		<button class="favorite-button" type="submit" aria-label={ favoriteLabel(favorite) } title={ favoriteLabel(favorite) }>{ favoriteGlyph(favorite) }</button>
+		if errorMessage != "" {
+			<span class="error">{ errorMessage }</span>
+		}
+	</form>
+}
+
+templ KitchenMutationResult(success bool, message string, date string) {
+	<div class={ mutationClass(success) }>
+		{ message }
+		if success && date != "" {
+			<a href={ templ.URL("/kitchen/daily?date=" + date) }>View day</a>
+		}
+	</div>
+}
+
+func recipePageURL(view domain.KitchenRecipeView, page int) string {
+	values := url.Values{"date": {view.SelectedDate.Format(scheduling.DateLayout)}, "entry_type": {view.SelectedType}, "page": {strconv.Itoa(page)}}
+	if view.Search != "" {
+		values.Set("q", view.Search)
+	}
+	if view.FavoritesOnly {
+		values.Set("favorites", "1")
+	}
+	return "/kitchen/recipes?" + values.Encode()
+}
+
+func recipeReturnURL(view domain.KitchenRecipeView) string { return recipePageURL(view, view.Page) }
+func favoriteGlyph(favorite bool) string {
+	if favorite {
+		return "★"
+	}
+	return "☆"
+}
+func favoriteLabel(favorite bool) string {
+	if favorite {
+		return "Remove favorite"
+	}
+	return "Add favorite"
+}
+func mutationClass(success bool) string {
+	if success {
+		return "mutation-result success"
+	}
+	return "mutation-result error"
+}
+func recipeTimeSummary(recipe domain.KitchenRecipeCard) string {
+	if recipe.TotalTime != "" {
+		return "Total " + recipe.TotalTime
+	}
+	if recipe.PrepTime != "" {
+		return "Prep " + recipe.PrepTime
+	}
+	return ""
+}
+func recipeRatingSummary(recipe domain.KitchenRecipeCard) string {
+	if recipe.Rating == nil {
+		return ""
+	}
+	return fmt.Sprintf(" · %.1f ★", *recipe.Rating)
+}

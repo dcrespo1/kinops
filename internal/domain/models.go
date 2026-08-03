@@ -53,6 +53,11 @@ type Person struct {
 	UpdatedAt     time.Time
 }
 
+type HouseholdSettings struct {
+	HouseholdEventColor string
+	UpdatedAt           time.Time
+}
+
 type Chore struct {
 	ID          int64
 	Name        string
@@ -158,6 +163,164 @@ type MonthView struct {
 	GridEnd    time.Time
 	HorizonEnd time.Time
 	Weeks      [][]MonthDay
+}
+
+type KitchenState string
+
+const (
+	KitchenReady        KitchenState = "ready"
+	KitchenDisabled     KitchenState = "disabled"
+	KitchenUnauthorized KitchenState = "unauthorized"
+	KitchenUnavailable  KitchenState = "unavailable"
+)
+
+type KitchenRecipe struct {
+	ID        string
+	Slug      string
+	Name      string
+	MealieURL string
+}
+
+type KitchenRecipeCard struct {
+	ID         string
+	Slug       string
+	Name       string
+	ImageURL   string
+	MealieURL  string
+	Categories []string
+	Rating     *float64
+	Favorite   bool
+	PrepTime   string
+	TotalTime  string
+}
+
+type KitchenRecipeView struct {
+	State         KitchenState
+	Message       string
+	Stale         bool
+	StaleMessage  string
+	Recipes       []KitchenRecipeCard
+	Search        string
+	FavoritesOnly bool
+	Page          int
+	TotalPages    int
+	Total         int
+	SelectedDate  time.Time
+	SelectedType  string
+}
+
+type KitchenMealInput struct {
+	Date      time.Time
+	EntryType string
+	Title     string
+	Text      string
+	RecipeID  string
+}
+
+type KitchenShoppingList struct {
+	ID   string
+	Name string
+}
+
+type KitchenGroceryItem struct {
+	ID             string
+	ShoppingListID string
+	Display        string
+	Note           string
+	Quantity       float64
+	UnitName       string
+	Checked        bool
+	Position       int
+	LabelID        string
+	LabelName      string
+	LabelColor     string
+}
+
+type KitchenGroceryGroup struct {
+	LabelID    string
+	Label      string
+	LabelColor string
+	Position   int
+	Items      []KitchenGroceryItem
+}
+
+type KitchenGroceryView struct {
+	State            KitchenState
+	Message          string
+	Stale            bool
+	StaleMessage     string
+	NavigationDate   time.Time
+	Lists            []KitchenShoppingList
+	SelectedListID   string
+	SelectedListName string
+	NeedsSelection   bool
+	ActiveGroups     []KitchenGroceryGroup
+	CheckedItems     []KitchenGroceryItem
+}
+
+type KitchenGroceryCreate struct {
+	ShoppingListID string
+	Display        string
+	Note           string
+	Quantity       float64
+	UnitName       string
+}
+
+type KitchenGroceryPatch struct {
+	Display  *string
+	Note     *string
+	Quantity *float64
+	UnitName *string
+	Checked  *bool
+}
+
+type KitchenMeal struct {
+	ID        int64
+	Date      time.Time
+	EntryType string
+	Title     string
+	Text      string
+	Recipe    *KitchenRecipe
+}
+
+type KitchenMealGroup struct {
+	Type  string
+	Label string
+	Meals []KitchenMeal
+}
+
+type KitchenDay struct {
+	Date   time.Time
+	Groups []KitchenMealGroup
+}
+
+type KitchenDailyView struct {
+	Date         time.Time
+	State        KitchenState
+	Message      string
+	Stale        bool
+	StaleMessage string
+	PublicURL    string
+	Day          KitchenDay
+}
+
+type KitchenWeekView struct {
+	StartDate    time.Time
+	EndDate      time.Time
+	State        KitchenState
+	Message      string
+	Stale        bool
+	StaleMessage string
+	PublicURL    string
+	Days         []KitchenDay
+}
+
+type MealieStatus struct {
+	Enabled   bool
+	Connected bool
+	Version   string
+	Message   string
+	CheckedAt time.Time
 }
 
 type CalendarFeed struct {
@@ -272,6 +435,7 @@ type ScheduledEvent struct {
 	Occurrence EventOccurrence
 	Event      HouseholdEvent
 	Audience   []Person
+	Color      string
 }
 
 type PersonDailyStats struct {

@@ -72,6 +72,30 @@ func TestRouter(t *testing.T) {
 			wantBody:   "July 2026",
 		},
 		{
+			name:       "kitchen daily disabled",
+			path:       "/kitchen/daily?date=2026-08-02",
+			wantStatus: http.StatusOK,
+			wantBody:   "Connect Mealie",
+		},
+		{
+			name:       "kitchen weekly disabled",
+			path:       "/kitchen/weekly?date=2026-08-02",
+			wantStatus: http.StatusOK,
+			wantBody:   "Kitchen weekly",
+		},
+		{
+			name:       "kitchen recipes disabled",
+			path:       "/kitchen/recipes?date=2026-08-03",
+			wantStatus: http.StatusOK,
+			wantBody:   "Connect Mealie",
+		},
+		{
+			name:       "kitchen groceries disabled",
+			path:       "/kitchen/groceries",
+			wantStatus: http.StatusOK,
+			wantBody:   "Connect Mealie",
+		},
+		{
 			name:       "new event preserves selected date",
 			path:       "/events/new?date=2026-08-04",
 			wantStatus: http.StatusOK,

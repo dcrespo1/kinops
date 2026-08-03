@@ -24,6 +24,9 @@ func (s *Service) DailyView(ctx context.Context, date time.Time) (domain.DailyVi
 	if err != nil {
 		return domain.DailyView{}, fmt.Errorf("list daily events: %w", err)
 	}
+	if err := s.colorScheduledEvents(ctx, eventItems); err != nil {
+		return domain.DailyView{}, err
+	}
 	view := domain.DailyView{Date: date, People: make([]domain.PersonDay, 0, len(people)), Events: eventItems}
 	personIndex := make(map[int64]int, len(people))
 	for _, person := range people {

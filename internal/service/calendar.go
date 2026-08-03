@@ -25,6 +25,9 @@ func (s *Service) WeeklyView(ctx context.Context, containingDate time.Time) (dom
 	if err != nil {
 		return domain.WeekView{}, fmt.Errorf("list weekly events: %w", err)
 	}
+	if err := s.colorScheduledEvents(ctx, eventItems); err != nil {
+		return domain.WeekView{}, err
+	}
 	eventsByDate := groupEventsByDate(eventItems, start, end, s.location)
 	today := scheduling.Date(s.now(), s.location)
 	view := domain.WeekView{
@@ -76,6 +79,9 @@ func (s *Service) MonthlyView(ctx context.Context, month time.Time) (domain.Mont
 	eventItems, err := s.repository.ListScheduledEvents(ctx, gridStart, gridEnd)
 	if err != nil {
 		return domain.MonthView{}, fmt.Errorf("list monthly events: %w", err)
+	}
+	if err := s.colorScheduledEvents(ctx, eventItems); err != nil {
+		return domain.MonthView{}, err
 	}
 	eventsByDate := groupEventsByDate(eventItems, gridStart, gridEnd, s.location)
 	today := scheduling.Date(s.now(), s.location)

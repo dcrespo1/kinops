@@ -40,6 +40,17 @@ func TestManagementFlowCreatesFixedSchedule(t *testing.T) {
 	if thirdPersonResponse.Code != http.StatusSeeOther {
 		t.Fatalf("create third person status = %d body=%s", thirdPersonResponse.Code, thirdPersonResponse.Body.String())
 	}
+	householdColorResponse := postForm(t, router, "/people/household-event-color", url.Values{"household_event_color": {"#0ea5e9"}})
+	if householdColorResponse.Code != http.StatusSeeOther {
+		t.Fatalf("update household event color status = %d body=%s", householdColorResponse.Code, householdColorResponse.Body.String())
+	}
+	var householdColor string
+	if err := db.QueryRow(`SELECT household_event_color FROM household_settings WHERE id = 1`).Scan(&householdColor); err != nil {
+		t.Fatal(err)
+	}
+	if householdColor != "#0ea5e9" {
+		t.Errorf("household event color = %q", householdColor)
+	}
 	choreResponse := postForm(t, router, "/chores", url.Values{"name": {"Dishes"}, "category": {"Kitchen"}})
 	if choreResponse.Code != http.StatusSeeOther {
 		t.Fatalf("create chore status = %d", choreResponse.Code)
@@ -164,12 +175,12 @@ func TestManagementFlowCreatesFixedSchedule(t *testing.T) {
 	}
 	agendaResponse := httptest.NewRecorder()
 	router.ServeHTTP(agendaResponse, httptest.NewRequest(http.MethodGet, "/daily?date="+today, nil))
-	if agendaResponse.Code != http.StatusOK || !strings.Contains(agendaResponse.Body.String(), "Family birthday") || !strings.Contains(agendaResponse.Body.String(), "Dylan") {
+	if agendaResponse.Code != http.StatusOK || !strings.Contains(agendaResponse.Body.String(), "Family birthday") || !strings.Contains(agendaResponse.Body.String(), "Dylan") || !strings.Contains(agendaResponse.Body.String(), "--event-color: #123456") {
 		t.Fatalf("daily agenda response = %d %s", agendaResponse.Code, agendaResponse.Body.String())
 	}
 	monthlyEventsResponse := httptest.NewRecorder()
 	router.ServeHTTP(monthlyEventsResponse, httptest.NewRequest(http.MethodGet, "/monthly?month="+today[:7], nil))
-	if monthlyEventsResponse.Code != http.StatusOK || !strings.Contains(monthlyEventsResponse.Body.String(), "Family birthday") || !strings.Contains(monthlyEventsResponse.Body.String(), "1 events") {
+	if monthlyEventsResponse.Code != http.StatusOK || !strings.Contains(monthlyEventsResponse.Body.String(), "Family birthday") || !strings.Contains(monthlyEventsResponse.Body.String(), "1 events") || !strings.Contains(monthlyEventsResponse.Body.String(), "--event-color: #123456") {
 		t.Fatalf("monthly events response = %d %s", monthlyEventsResponse.Code, monthlyEventsResponse.Body.String())
 	}
 	weeklyEventsResponse := httptest.NewRecorder()

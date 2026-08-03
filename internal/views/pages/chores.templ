@@ -48,9 +48,11 @@ templ choresContent(chores []domain.Chore) {
 		<a class="button" href="/chores/new">New chore</a>
 	</section>
 	if len(chores) == 0 {
-		<section class="empty">
-			<p>No chores yet.</p>
-			<a href="/chores/new">Create the first chore</a>
+		<section class="empty empty-state">
+			<span class="empty-icon" aria-hidden="true">✓</span>
+			<h2>Your chore list is ready</h2>
+			<p>Add the first recurring or one-off job for your household.</p>
+			<a class="button" href="/chores/new">Create the first chore</a>
 		</section>
 	}
 	if len(chores) > 0 {
@@ -189,15 +191,20 @@ templ personOptions(people []domain.Person, selected *int64) {
 	}
 }
 
-templ People(people []domain.Person, errorMessage string) {
-	@layouts.Base("People · KinOps", peopleContent(people, errorMessage))
+templ People(people []domain.Person, settings domain.HouseholdSettings, errorMessage string) {
+	@layouts.Base("People · KinOps", peopleContent(people, settings, errorMessage))
 }
 
-templ peopleContent(people []domain.Person, errorMessage string) {
-	<section class="page-header"><div><h1>People</h1><p>Add the household members who can receive chores.</p></div></section>
+templ peopleContent(people []domain.Person, settings domain.HouseholdSettings, errorMessage string) {
+	<section class="page-header"><div><h1>People</h1><p>Configure household members and the colors used across chores and events.</p></div></section>
 	if errorMessage != "" {
 		<p class="error">{ errorMessage }</p>
 	}
+	<form class="household-color-form" method="post" action="/people/household-event-color">
+		<div><h2>Household events</h2><p>Used for events shared by everyone or assigned to multiple people.</p></div>
+		<label>Household color<input name="household_event_color" type="color" value={ settings.HouseholdEventColor } required/></label>
+		<button type="submit">Save color</button>
+	</form>
 	<section class="people-grid">
 		<div>
 			for _, person := range people {

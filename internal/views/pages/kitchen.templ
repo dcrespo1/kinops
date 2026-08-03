@@ -1,0 +1,206 @@
+package pages
+
+import (
+	"fmt"
+
+	"github.com/dcrespo1/kinops/internal/domain"
+	"github.com/dcrespo1/kinops/internal/scheduling"
+	"github.com/dcrespo1/kinops/internal/views/components"
+	"github.com/dcrespo1/kinops/internal/views/layouts"
+)
+
+templ KitchenDaily(view domain.KitchenDailyView) {
+	@layouts.Base("Kitchen daily · KinOps", kitchenDailyContent(view))
+}
+
+templ kitchenDailyContent(view domain.KitchenDailyView) {
+	@components.KitchenNavigation("daily", view.Date)
+	<section class="calendar-header">
+		<div><p class="eyebrow">Kitchen daily</p><h1>{ view.Date.Format("Monday, January 2") }</h1><p>{ kitchenDaySummary(view.Day) }</p></div>
+		<nav class="date-nav" aria-label="Kitchen day navigation">
+			<a class="button" href={ templ.URL("/kitchen/recipes?date=" + view.Date.Format(scheduling.DateLayout) + "&entry_type=dinner") }>Add meal</a>
+			<a class="button secondary" href={ templ.URL("/kitchen/daily?date=" + view.Date.AddDate(0, 0, -1).Format(scheduling.DateLayout)) } aria-label="Previous day">←</a>
+			<a class="button secondary" href="/kitchen/daily">Today</a>
+			<a class="button secondary" href={ templ.URL("/kitchen/daily?date=" + view.Date.AddDate(0, 0, 1).Format(scheduling.DateLayout)) } aria-label="Next day">→</a>
+		</nav>
+	</section>
+	@kitchenState(view.State, view.Message)
+	@kitchenStale(view.Stale, view.StaleMessage)
+	if view.State == domain.KitchenReady {
+		if len(view.Day.Groups) == 0 {
+			<section class="empty"><h2>No meals planned</h2><p>Add a meal in Mealie and it will appear here.</p></section>
+		}
+		<div class="kitchen-day-groups">
+			for _, group := range view.Day.Groups {
+				@kitchenGroup(group)
+			}
+		</div>
+	}
+}
+
+templ KitchenWeekly(view domain.KitchenWeekView) {
+	@layouts.Base("Kitchen weekly · KinOps", kitchenWeeklyContent(view))
+}
+
+templ kitchenWeeklyContent(view domain.KitchenWeekView) {
+	@components.KitchenNavigation("weekly", view.StartDate)
+	<section class="calendar-header">
+		<div><p class="eyebrow">Kitchen weekly</p><h1>{ fmt.Sprintf("%s – %s", view.StartDate.Format("Jan 2"), view.EndDate.Format("Jan 2, 2006")) }</h1><p>{ kitchenWeekSummary(view) }</p></div>
+		<nav class="date-nav" aria-label="Kitchen week navigation">
+			<a class="button secondary" href={ templ.URL("/kitchen/weekly?date=" + view.StartDate.AddDate(0, 0, -7).Format(scheduling.DateLayout)) } aria-label="Previous week">←</a>
+			<a class="button secondary" href="/kitchen/weekly">This week</a>
+			<a class="button secondary" href={ templ.URL("/kitchen/weekly?date=" + view.StartDate.AddDate(0, 0, 7).Format(scheduling.DateLayout)) } aria-label="Next week">→</a>
+		</nav>
+	</section>
+	@kitchenState(view.State, view.Message)
+	@kitchenStale(view.Stale, view.StaleMessage)
+	if view.State == domain.KitchenReady {
+		<section class="kitchen-week" aria-label="Weekly meal plan">
+			for _, day := range view.Days {
+				<article class="kitchen-week-day">
+					<header><a href={ templ.URL("/kitchen/daily?date=" + day.Date.Format(scheduling.DateLayout)) }><strong>{ day.Date.Format("Mon") }</strong><span>{ day.Date.Format("Jan 2") }</span></a></header>
+					<a class="kitchen-add-meal" href={ templ.URL("/kitchen/recipes?date=" + day.Date.Format(scheduling.DateLayout) + "&entry_type=dinner") }>+ Add meal</a>
+					<div class="kitchen-week-meals">
+						if len(day.Groups) == 0 {
+							<span class="week-empty">Nothing planned</span>
+						}
+						for _, group := range day.Groups {
+							@kitchenGroup(group)
+						}
+					</div>
+				</article>
+			}
+		</section>
+	}
+}
+
+templ kitchenStale(stale bool, message string) {
+	if stale {
+		<section class="empty kitchen-stale" role="status"><h2>Mealie connection interrupted</h2><p>{ message }</p></section>
+	}
+}
+
+templ kitchenState(state domain.KitchenState, message string) {
+	if state != domain.KitchenReady {
+		<section class="empty kitchen-state"><h2>{ kitchenStateTitle(state) }</h2><p>{ message }</p></section>
+	}
+}
+
+templ kitchenGroup(group domain.KitchenMealGroup) {
+	<section class="kitchen-meal-group">
+		<div class="kitchen-group-heading">
+			<h2>{ group.Label }</h2>
+			if len(group.Meals) > 0 {
+				<a href={ templ.URL("/kitchen/recipes?date=" + group.Meals[0].Date.Format(scheduling.DateLayout) + "&entry_type=" + group.Type) }>+ Add another</a>
+			}
+		</div>
+		<div>
+			for _, meal := range group.Meals {
+				@KitchenMealCard(meal)
+			}
+		</div>
+	</section>
+}
+
+templ KitchenMealCard(meal domain.KitchenMeal) {
+	<article id={ fmt.Sprintf("meal-%d", meal.ID) } class="kitchen-meal">
+		<div>
+			<h3>{ kitchenMealTitle(meal) }</h3>
+			if meal.Text != "" {
+				<p>{ meal.Text }</p>
+			}
+		</div>
+		if meal.Recipe != nil && meal.Recipe.MealieURL != "" {
+			<a href={ templ.URL(meal.Recipe.MealieURL) } target="_blank" rel="noreferrer">Open in Mealie ↗</a>
+		}
+		<details class="kitchen-meal-edit">
+			<summary><span class="edit-open-label">Edit</span><span class="edit-close-label">Close editor</span></summary>
+			<form method="post" action={ templ.URL(fmt.Sprintf("/kitchen/meals/%d", meal.ID)) } hx-put={ fmt.Sprintf("/kitchen/meals/%d", meal.ID) } hx-target="closest article" hx-swap="outerHTML">
+				<input type="hidden" name="_method" value="PUT"/>
+				<input type="hidden" name="return_to" value={ "/kitchen/daily?date=" + meal.Date.Format(scheduling.DateLayout) }/>
+				if meal.Recipe != nil {
+					<input type="hidden" name="recipe_id" value={ meal.Recipe.ID }/>
+				}
+				<label>Date <input type="date" name="date" value={ meal.Date.Format(scheduling.DateLayout) } required/></label>
+				<label>
+					Meal 
+					<select name="entry_type">
+						@mealTypeOptions(meal.EntryType)
+					</select>
+				</label>
+				<label>Title <input name="title" maxlength="200" value={ meal.Title }/></label>
+				<label>Note <textarea name="text" maxlength="4000">{ meal.Text }</textarea></label>
+				<button type="submit">Save</button>
+			</form>
+			<form method="post" action={ templ.URL(fmt.Sprintf("/kitchen/meals/%d", meal.ID)) } hx-delete={ fmt.Sprintf("/kitchen/meals/%d", meal.ID) } hx-target="closest article" hx-swap="outerHTML" hx-confirm="Remove this meal from the plan?">
+				<input type="hidden" name="_method" value="DELETE"/>
+				<input type="hidden" name="return_to" value={ "/kitchen/daily?date=" + meal.Date.Format(scheduling.DateLayout) }/>
+				<button class="danger" type="submit">Remove</button>
+			</form>
+		</details>
+	</article>
+}
+
+templ mealTypeOptions(selected string) {
+	<option value="breakfast" selected?={ selected == "breakfast" }>Breakfast</option>
+	<option value="lunch" selected?={ selected == "lunch" }>Lunch</option>
+	<option value="dinner" selected?={ selected == "dinner" }>Dinner</option>
+	<option value="side" selected?={ selected == "side" }>Side</option>
+	<option value="snack" selected?={ selected == "snack" }>Snack</option>
+	<option value="drink" selected?={ selected == "drink" }>Drink</option>
+	<option value="dessert" selected?={ selected == "dessert" }>Dessert</option>
+}
+
+func kitchenMealTitle(meal domain.KitchenMeal) string {
+	if meal.Recipe != nil && meal.Recipe.Name != "" {
+		return meal.Recipe.Name
+	}
+	if meal.Title != "" {
+		return meal.Title
+	}
+	if meal.Text != "" {
+		return meal.Text
+	}
+	return "Meal"
+}
+
+func kitchenDaySummary(day domain.KitchenDay) string {
+	total := 0
+	for _, group := range day.Groups {
+		total += len(group.Meals)
+	}
+	if total == 0 {
+		return "No meals planned for this day."
+	}
+	if total == 1 {
+		return "1 meal planned."
+	}
+	return fmt.Sprintf("%d meals planned.", total)
+}
+
+func kitchenWeekSummary(view domain.KitchenWeekView) string {
+	total := 0
+	for _, day := range view.Days {
+		for _, group := range day.Groups {
+			total += len(group.Meals)
+		}
+	}
+	if total == 0 {
+		return "No meals planned this week."
+	}
+	if total == 1 {
+		return "1 meal planned this week."
+	}
+	return fmt.Sprintf("%d meals planned this week.", total)
+}
+
+func kitchenStateTitle(state domain.KitchenState) string {
+	switch state {
+	case domain.KitchenDisabled:
+		return "Connect Mealie"
+	case domain.KitchenUnauthorized:
+		return "Mealie needs attention"
+	default:
+		return "Kitchen is temporarily unavailable"
+	}
+}

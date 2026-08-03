@@ -26,6 +26,8 @@ type ManagementService interface {
 	DeactivateChore(context.Context, int64) error
 	ListPeople(context.Context) ([]domain.Person, error)
 	CreatePerson(context.Context, domain.Person) (domain.Person, error)
+	GetHouseholdSettings(context.Context) (domain.HouseholdSettings, error)
+	UpdateHouseholdEventColor(context.Context, string) error
 	GetSchedule(context.Context, int64) (domain.Schedule, error)
 	CreateSchedule(context.Context, domain.Schedule) (domain.Schedule, error)
 	UpdateSchedule(context.Context, domain.Schedule) error
@@ -147,7 +149,12 @@ func (h *ManagementHandler) PeopleIndex(w http.ResponseWriter, r *http.Request) 
 		h.internalError(w, r, err)
 		return
 	}
-	h.render(w, r, pages.People(people, ""), http.StatusOK)
+	settings, err := h.service.GetHouseholdSettings(r.Context())
+	if err != nil {
+		h.internalError(w, r, err)
+		return
+	}
+	h.render(w, r, pages.People(people, settings, ""), http.StatusOK)
 }
 
 func (h *ManagementHandler) PersonCreate(w http.ResponseWriter, r *http.Request) {
@@ -158,7 +165,30 @@ func (h *ManagementHandler) PersonCreate(w http.ResponseWriter, r *http.Request)
 			h.internalError(w, r, listErr)
 			return
 		}
-		h.render(w, r, pages.People(people, err.Error()), http.StatusUnprocessableEntity)
+		settings, settingsErr := h.service.GetHouseholdSettings(r.Context())
+		if settingsErr != nil {
+			h.internalError(w, r, settingsErr)
+			return
+		}
+		h.render(w, r, pages.People(people, settings, err.Error()), http.StatusUnprocessableEntity)
+		return
+	}
+	h.redirect(w, r, "/people")
+}
+
+func (h *ManagementHandler) HouseholdEventColorUpdate(w http.ResponseWriter, r *http.Request) {
+	if err := h.service.UpdateHouseholdEventColor(r.Context(), r.FormValue("household_event_color")); err != nil {
+		people, listErr := h.service.ListPeople(r.Context())
+		if listErr != nil {
+			h.internalError(w, r, listErr)
+			return
+		}
+		settings, settingsErr := h.service.GetHouseholdSettings(r.Context())
+		if settingsErr != nil {
+			h.internalError(w, r, settingsErr)
+			return
+		}
+		h.render(w, r, pages.People(people, settings, err.Error()), http.StatusUnprocessableEntity)
 		return
 	}
 	h.redirect(w, r, "/people")

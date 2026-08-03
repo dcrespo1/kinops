@@ -24,6 +24,7 @@ type PublicEventService interface {
 	UpdateEvent(context.Context, domain.HouseholdEvent) error
 	DeactivateEvent(context.Context, int64) error
 	ListPeople(context.Context) ([]domain.Person, error)
+	GetHouseholdSettings(context.Context) (domain.HouseholdSettings, error)
 }
 
 type EventHandler struct {
@@ -42,7 +43,17 @@ func (h *EventHandler) Index(w http.ResponseWriter, r *http.Request) {
 		h.internalError(w, r, err)
 		return
 	}
-	h.render(w, r, pages.Events(items), http.StatusOK)
+	people, err := h.service.ListPeople(r.Context())
+	if err != nil {
+		h.internalError(w, r, err)
+		return
+	}
+	settings, err := h.service.GetHouseholdSettings(r.Context())
+	if err != nil {
+		h.internalError(w, r, err)
+		return
+	}
+	h.render(w, r, pages.Events(items, people, settings), http.StatusOK)
 }
 
 func (h *EventHandler) New(w http.ResponseWriter, r *http.Request) {

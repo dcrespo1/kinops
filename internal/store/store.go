@@ -21,6 +21,11 @@ type People interface {
 	RotatePersonCalendarToken(context.Context, int64, string) error
 }
 
+type HouseholdSettings interface {
+	GetHouseholdSettings(context.Context) (domain.HouseholdSettings, error)
+	UpdateHouseholdEventColor(context.Context, string) error
+}
+
 type Chores interface {
 	GetChore(context.Context, int64) (domain.Chore, error)
 	ListChores(context.Context, bool) ([]domain.Chore, error)
@@ -76,6 +81,7 @@ type Events interface {
 
 type Repository interface {
 	People
+	HouseholdSettings
 	Chores
 	Schedules
 	Instances

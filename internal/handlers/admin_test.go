@@ -23,6 +23,10 @@ type fakeAdminService struct {
 	err       error
 }
 
+type fakeMealieStatusService struct{ status domain.MealieStatus }
+
+func (f fakeMealieStatusService) MealieStatus(context.Context) domain.MealieStatus { return f.status }
+
 func (f *fakeAdminService) AdminDashboard(context.Context) (domain.AdminDashboard, error) {
 	return f.dashboard, f.err
 }
@@ -49,7 +53,7 @@ func TestAdminLoginDashboardCSRFAndRotation(t *testing.T) {
 		People:         []domain.PersonAnalytics{{Person: person, Assigned: 4, Completed: 3, RatePercent: 75}},
 		CalendarPeople: []domain.Person{person},
 	}}
-	router := adminTestRouter(fake, manager)
+	router := adminTestRouterWithMealie(fake, manager, fakeMealieStatusService{status: domain.MealieStatus{Enabled: true, Connected: true, Version: "v3.22.0", Message: "Connected", CheckedAt: time.Date(2026, 8, 2, 12, 0, 0, 0, time.UTC)}})
 
 	badLogin := postAdminForm(router, "/admin/login", url.Values{"username": {"admin"}, "password": {"wrong"}}, nil)
 	if badLogin.Code != http.StatusUnauthorized || len(badLogin.Result().Cookies()) != 0 || !strings.Contains(badLogin.Body.String(), "Invalid username or password") {
@@ -65,7 +69,7 @@ func TestAdminLoginDashboardCSRFAndRotation(t *testing.T) {
 	dashboardRequest.AddCookie(cookie)
 	dashboard := httptest.NewRecorder()
 	router.ServeHTTP(dashboard, dashboardRequest)
-	if dashboard.Code != http.StatusOK || !strings.Contains(dashboard.Body.String(), "Completion overview") || !strings.Contains(dashboard.Body.String(), "https://kinops.example/calendar/"+person.CalendarToken+".ics") {
+	if dashboard.Code != http.StatusOK || !strings.Contains(dashboard.Body.String(), "Completion overview") || !strings.Contains(dashboard.Body.String(), "https://kinops.example/calendar/"+person.CalendarToken+".ics") || !strings.Contains(dashboard.Body.String(), "v3.22.0") {
 		t.Errorf("dashboard = %d %s", dashboard.Code, dashboard.Body.String())
 	}
 
@@ -107,7 +111,11 @@ func TestAdminRoutesRequireSession(t *testing.T) {
 }
 
 func adminTestRouter(service AdminService, manager *auth.Manager) http.Handler {
-	handler := NewAdminHandler(service, manager, slog.New(slog.NewTextHandler(io.Discard, nil)))
+	return adminTestRouterWithMealie(service, manager, nil)
+}
+
+func adminTestRouterWithMealie(service AdminService, manager *auth.Manager, mealie MealieStatusService) http.Handler {
+	handler := NewAdminHandler(service, manager, slog.New(slog.NewTextHandler(io.Discard, nil)), mealie)
 	router := chi.NewRouter()
 	router.Get("/admin/login", handler.LoginPage)
 	router.Post("/admin/login", handler.Login)

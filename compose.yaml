@@ -18,6 +18,11 @@ services:
       KINOPS_ADMIN_USERNAME: "${KINOPS_ADMIN_USERNAME:-}"
       KINOPS_ADMIN_PASSWORD_HASH: "${KINOPS_ADMIN_PASSWORD_HASH:-}"
       KINOPS_ADMIN_COOKIE_SECURE: "${KINOPS_ADMIN_COOKIE_SECURE:-false}"
+      MEALIE_BASE_URL: "${MEALIE_BASE_URL:-}"
+      MEALIE_PUBLIC_URL: "${MEALIE_PUBLIC_URL:-}"
+      MEALIE_API_TOKEN: "${MEALIE_API_TOKEN:-}"
+      MEALIE_DEFAULT_SHOPPING_LIST_ID: "${MEALIE_DEFAULT_SHOPPING_LIST_ID:-}"
+      MEALIE_REQUEST_TIMEOUT: "${MEALIE_REQUEST_TIMEOUT:-5s}"
 
     ports:
       - "${KINOPS_PORT:-8081}:8081"
@@ -43,5 +48,41 @@ services:
     tmpfs:
       - /tmp:size=16m,mode=1777
 
+  mealie:
+    image: ghcr.io/mealie-recipes/mealie:v3.22.0
+    container_name: mealie
+    restart: unless-stopped
+
+    environment:
+      ALLOW_SIGNUP: "false"
+      API_DOCS: "true"
+      BASE_URL: "${MEALIE_PUBLIC_URL:-http://localhost:9925}"
+      DEFAULT_GROUP: "KinOps"
+      DEFAULT_HOUSEHOLD: "Family"
+      TZ: "${KINOPS_TIMEZONE:-America/New_York}"
+
+    ports:
+      - "${MEALIE_PORT:-9925}:9000"
+
+    volumes:
+      - mealie-data:/app/data
+
+    deploy:
+      resources:
+        limits:
+          memory: 1G
+
+    healthcheck:
+      test:
+        - CMD
+        - python
+        - -c
+        - "import urllib.request; urllib.request.urlopen('http://127.0.0.1:9000/api/app/about', timeout=3)"
+      interval: 30s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+
 volumes:
   kinops-data:
+  mealie-data:

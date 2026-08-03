@@ -7,23 +7,37 @@ templ Base(title string, content templ.Component) {
 			<meta charset="utf-8"/>
 			<meta name="viewport" content="width=device-width, initial-scale=1"/>
 			<title>{ title }</title>
-			<link rel="stylesheet" href="/static/css/app.css"/>
+			<link rel="stylesheet" href="/static/css/app.css?v=20260803-4"/>
 			<script defer src="/static/js/htmx.min.js"></script>
 			<script defer src="/static/js/alpine.min.js"></script>
 		</head>
 		<body>
-			<header>
-				<nav>
-					<a href="/">KinOps</a>
-					<a href="/chores">Manage chores</a>
-					<a href="/events">Events</a>
-					<a href="/people">People</a>
-					<a href="/admin">Admin</a>
+			<a class="skip-link" href="#main-content">Skip to content</a>
+			<header class="site-header">
+				<nav class="primary-nav" aria-label="Primary navigation">
+					<a class="brand" href="/" aria-label="KinOps home"><span class="brand-mark" aria-hidden="true">K</span><span>KinOps</span></a>
+					@primaryLinks("primary-links desktop-links")
+					<details class="nav-menu">
+						<summary class="nav-toggle"><span aria-hidden="true">☰</span><span>Menu</span></summary>
+						@primaryLinks("primary-links mobile-links")
+					</details>
 				</nav>
 			</header>
-			<main id="main-content" hx-boost="true">
+			<main id="main-content" tabindex="-1" hx-boost="true" hx-indicator="#page-loading">
+				<div id="page-loading" class="htmx-indicator page-loading" role="status" aria-live="polite">Loading…</div>
 				@content
 			</main>
 		</body>
 	</html>
+}
+
+templ primaryLinks(className string) {
+	<div class={ className }>
+		<a href="/daily">Schedule</a>
+		<a href="/chores">Chores</a>
+		<a href="/events">Events</a>
+		<a href="/kitchen">Kitchen</a>
+		<a href="/people">People</a>
+		<a href="/admin">Admin</a>
+	</div>
 }
