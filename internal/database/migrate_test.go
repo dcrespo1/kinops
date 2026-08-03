@@ -29,6 +29,7 @@ func TestMigrateCreatesSchema(t *testing.T) {
 		"household_events",
 		"event_audiences",
 		"event_occurrences",
+		"household_settings",
 	}
 
 	for _, table := range expectedTables {

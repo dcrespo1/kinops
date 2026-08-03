@@ -41,8 +41,48 @@ func TestCreateEventMaterializesDailyAgendaWithAudience(t *testing.T) {
 	if view.Events[0].Event.Title != "Dentist" || len(view.Events[0].Audience) != 1 || view.Events[0].Audience[0].ID != person.ID {
 		t.Errorf("scheduled event = %#v", view.Events[0])
 	}
+	if view.Events[0].Color != person.Color {
+		t.Errorf("scheduled event color = %q, want %q", view.Events[0].Color, person.Color)
+	}
 	if got := view.Events[0].Occurrence.StartAt.In(location).Format("15:04"); got != "09:30" {
 		t.Errorf("start = %s", got)
+	}
+}
+
+func TestHouseholdAndMultiPersonEventsUseConfiguredHouseholdColor(t *testing.T) {
+	db := testutil.NewTestDatabase(t)
+	now := dateIn(t, time.UTC, "2026-08-01")
+	service := NewWithClock(store.NewSQLite(db), time.UTC, func() time.Time { return now })
+	if err := service.UpdateHouseholdEventColor(context.Background(), "#0ea5e9"); err != nil {
+		t.Fatal(err)
+	}
+	first, err := service.CreatePerson(context.Background(), domain.Person{Name: "Dylan", Color: "#123456"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	second, err := service.CreatePerson(context.Background(), domain.Person{Name: "Amanda", Color: "#654321"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, event := range []domain.HouseholdEvent{
+		{Title: "Family day", AllDay: true, StartDate: now, EndDate: now.AddDate(0, 0, 1), Rule: domain.EventRecurrenceRule{Type: domain.EventRuleOneOff}},
+		{Title: "Parents night", AllDay: true, StartDate: now, EndDate: now.AddDate(0, 0, 1), Rule: domain.EventRecurrenceRule{Type: domain.EventRuleOneOff}, AudiencePersonIDs: []int64{first.ID, second.ID}},
+	} {
+		if _, err := service.CreateEvent(context.Background(), event); err != nil {
+			t.Fatal(err)
+		}
+	}
+	view, err := service.DailyView(context.Background(), now)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(view.Events) != 2 {
+		t.Fatalf("events = %#v", view.Events)
+	}
+	for _, event := range view.Events {
+		if event.Color != "#0ea5e9" {
+			t.Errorf("event %q color = %q", event.Event.Title, event.Color)
+		}
 	}
 }
 

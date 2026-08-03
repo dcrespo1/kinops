@@ -12,6 +12,7 @@ type AdminPageData struct {
 	Dashboard domain.AdminDashboard
 	CSRFToken string
 	BaseURL   string
+	Mealie    domain.MealieStatus
 }
 
 templ AdminLogin(errorMessage string) {
@@ -93,6 +94,39 @@ templ adminContent(data AdminPageData) {
 		<div class="section-heading"><div><p class="eyebrow">Family calendar</p><h2 id="events-heading">Household events</h2></div><a class="button" href="/events">Manage events</a></div>
 		<p class="admin-help">Add birthdays, appointments, vacations, holidays, and other agenda items.</p>
 	</section>
+	<section class="admin-section" aria-labelledby="mealie-heading">
+		<div class="section-heading"><div><p class="eyebrow">Kitchen integration</p><h2 id="mealie-heading">Mealie status</h2></div></div>
+		<div class="settings-summary">
+			<div><span>Connectivity</span><strong>{ mealieConnectivity(data.Mealie) }</strong></div>
+			<div><span>Version</span><strong>{ mealieVersion(data.Mealie) }</strong></div>
+			<div><span>Checked</span><strong>{ mealieChecked(data.Mealie) }</strong></div>
+		</div>
+		<p class="admin-help">{ data.Mealie.Message } Kitchen connectivity is informational and is not part of KinOps core health.</p>
+	</section>
+}
+
+func mealieConnectivity(status domain.MealieStatus) string {
+	if !status.Enabled {
+		return "Not configured"
+	}
+	if status.Connected {
+		return "Connected"
+	}
+	return "Unavailable"
+}
+
+func mealieVersion(status domain.MealieStatus) string {
+	if status.Version == "" {
+		return "—"
+	}
+	return status.Version
+}
+
+func mealieChecked(status domain.MealieStatus) string {
+	if status.CheckedAt.IsZero() {
+		return "Not checked"
+	}
+	return status.CheckedAt.Format("Jan 2, 3:04:05 PM")
 }
 
 templ summaryMetric(label string, metric domain.AnalyticsWindow) {

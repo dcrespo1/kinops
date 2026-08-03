@@ -1,0 +1,156 @@
+package pages
+
+import (
+	"fmt"
+	"net/url"
+	"strconv"
+
+	"github.com/dcrespo1/kinops/internal/domain"
+	"github.com/dcrespo1/kinops/internal/views/components"
+	"github.com/dcrespo1/kinops/internal/views/layouts"
+)
+
+templ KitchenGroceries(view domain.KitchenGroceryView) {
+	@layouts.Base("Kitchen groceries · KinOps", kitchenGroceriesContent(view))
+}
+
+templ kitchenGroceriesContent(view domain.KitchenGroceryView) {
+	@components.KitchenNavigation("groceries", view.NavigationDate)
+	<section class="page-header grocery-header">
+		<div><p class="eyebrow">Kitchen groceries</p><h1>Shopping lists</h1><p>Quickly add, check, and update items stored in Mealie.</p></div>
+	</section>
+	@kitchenState(view.State, view.Message)
+	@kitchenStale(view.Stale, view.StaleMessage)
+	if view.State == domain.KitchenReady {
+		if len(view.Lists) > 0 {
+			<form class="grocery-list-selector" method="get" action="/kitchen/groceries">
+				<label>
+					Shopping list
+					<select name="list" onchange="this.form.requestSubmit()">
+						<option value="" selected?={ view.SelectedListID == "" }>Choose a list…</option>
+						for _, list := range view.Lists {
+							<option value={ list.ID } selected?={ list.ID == view.SelectedListID }>{ list.Name }</option>
+						}
+					</select>
+				</label>
+				<noscript><button type="submit">Open</button></noscript>
+			</form>
+		}
+		if len(view.Lists) == 0 {
+			<section class="empty"><h2>No shopping lists</h2><p>Create a shopping list in Mealie, then return here.</p></section>
+		} else {
+			@KitchenGroceryContent(view)
+		}
+	}
+}
+
+templ KitchenGroceryContent(view domain.KitchenGroceryView) {
+	<section id="grocery-list-content" aria-live="polite">
+		if view.SelectedListID == "" {
+			<section class="empty grocery-selection"><h2>Choose a shopping list</h2><p>{ view.Message }</p></section>
+		} else {
+			<section class="grocery-quick-add">
+				<div><h2>{ view.SelectedListName }</h2><p>Add something without leaving the list.</p></div>
+				<form method="post" action="/kitchen/groceries/items" hx-post="/kitchen/groceries/items" hx-target="#grocery-list-content" hx-swap="outerHTML">
+					<input type="hidden" name="list" value={ view.SelectedListID }/>
+					<label>Item <input name="display" maxlength="500" placeholder="Milk" required/></label>
+					<label>Quantity <input type="number" name="quantity" min="0" step="any" value="1" inputmode="decimal"/></label>
+					<label>Unit <input name="unit" maxlength="100" placeholder="optional"/></label>
+					<button type="submit">Add item</button>
+				</form>
+				<div id="grocery-add-error" aria-live="polite"></div>
+			</section>
+			<div id="grocery-errors" aria-live="polite"></div>
+			if len(view.ActiveGroups) == 0 {
+				<section class="empty grocery-empty"><h2>Everything is checked off</h2><p>Add another item or reopen one below.</p></section>
+			}
+			<div class="grocery-groups">
+				for _, group := range view.ActiveGroups {
+					<section class="grocery-group">
+						<header style={ fmt.Sprintf("--label-color:%s", group.LabelColor) }><span></span><h2>{ group.Label }</h2><small>{ strconv.Itoa(len(group.Items)) }</small></header>
+						<div>
+							for _, item := range group.Items {
+								@KitchenGroceryItem(item)
+							}
+						</div>
+					</section>
+				}
+			</div>
+			if len(view.CheckedItems) > 0 {
+				<details class="grocery-checked">
+					<summary>Checked items ({ strconv.Itoa(len(view.CheckedItems)) })</summary>
+					<div>
+						for _, item := range view.CheckedItems {
+							@KitchenGroceryItem(item)
+						}
+					</div>
+				</details>
+			}
+		}
+	</section>
+}
+
+templ KitchenGroceryItem(item domain.KitchenGroceryItem) {
+	<article id={ "grocery-item-" + item.ID } class={ "grocery-item", templ.KV("is-checked", item.Checked) }>
+		<form class="grocery-check-form" method="post" action={ templ.URL("/kitchen/groceries/items/" + item.ID) } hx-put={ "/kitchen/groceries/items/" + item.ID } hx-target="#grocery-list-content" hx-swap="outerHTML">
+			<input type="hidden" name="_method" value="PUT"/>
+			<input type="hidden" name="list" value={ item.ShoppingListID }/>
+			<input type="hidden" name="checked" value={ checkedTarget(item.Checked) }/>
+			<button type="submit" aria-label={ groceryCheckLabel(item.Checked) }>{ groceryCheckGlyph(item.Checked) }</button>
+		</form>
+		<div class="grocery-item-copy">
+			<strong>{ item.Display }</strong>
+			if item.Note != "" {
+				<small>{ item.Note }</small>
+			}
+		</div>
+		<span class="grocery-quantity">{ groceryQuantity(item) }</span>
+		<details class="grocery-item-edit">
+			<summary aria-label="Edit item">•••</summary>
+			<form method="post" action={ templ.URL("/kitchen/groceries/items/" + item.ID) } hx-put={ "/kitchen/groceries/items/" + item.ID } hx-target="#grocery-list-content" hx-swap="outerHTML">
+				<input type="hidden" name="_method" value="PUT"/>
+				<input type="hidden" name="list" value={ item.ShoppingListID }/>
+				<label>Item <input name="display" maxlength="500" value={ item.Display } required/></label>
+				<label>Quantity <input type="number" name="quantity" min="0" step="any" value={ strconv.FormatFloat(item.Quantity, 'f', -1, 64) } inputmode="decimal"/></label>
+				<label>Unit <input name="unit" maxlength="100" value={ item.UnitName }/></label>
+				<label>Note <input name="note" maxlength="2000" value={ item.Note }/></label>
+				<div class="actions"><button type="submit">Save</button></div>
+			</form>
+			<form class="grocery-delete-form" method="post" action={ templ.URL("/kitchen/groceries/items/" + item.ID) } hx-delete={ groceryDeleteURL(item) } hx-target="#grocery-list-content" hx-swap="outerHTML" hx-confirm="Remove this grocery item?">
+				<input type="hidden" name="_method" value="DELETE"/>
+				<input type="hidden" name="list" value={ item.ShoppingListID }/>
+				<button class="danger" type="submit">Delete</button>
+			</form>
+			<div id={ "grocery-item-error-" + item.ID } aria-live="polite"></div>
+		</details>
+	</article>
+}
+
+func checkedTarget(checked bool) string {
+	if checked {
+		return "false"
+	}
+	return "true"
+}
+func groceryCheckGlyph(checked bool) string {
+	if checked {
+		return "↶"
+	}
+	return "✓"
+}
+func groceryCheckLabel(checked bool) string {
+	if checked {
+		return "Reopen item"
+	}
+	return "Check item"
+}
+func groceryQuantity(item domain.KitchenGroceryItem) string {
+	quantity := strconv.FormatFloat(item.Quantity, 'f', -1, 64)
+	if item.UnitName != "" {
+		return quantity + " " + item.UnitName
+	}
+	return quantity
+}
+func groceryDeleteURL(item domain.KitchenGroceryItem) string {
+	return "/kitchen/groceries/items/" + item.ID + "?list=" + url.QueryEscape(item.ShoppingListID)
+}

@@ -47,6 +47,13 @@ dashboard.
 
 4. Open [http://localhost:8081](http://localhost:8081).
 
+Mealie is available separately at
+[http://localhost:9925](http://localhost:9925). On a fresh installation, sign
+in with Mealie's documented bootstrap credentials (`changeme@example.com` /
+`MyPassword`), change that password immediately, and create a long-lived API
+token under `/user/profile/api-tokens`. Put the token in the ignored local
+`.env` file as `MEALIE_API_TOKEN`; never commit it.
+
 The SQLite database is stored in the `kinops-data` Docker volume and survives
 container recreation.
 
@@ -64,7 +71,9 @@ Do not add `--volumes` unless you intentionally want to delete the database.
 2. Open `/chores` to create chores and schedules.
 3. Open `/events` to add birthdays, appointments, vacations, and other family
    events.
-4. Use `/admin` to review analytics and copy each person's calendar feed URL.
+4. Open `/kitchen/daily` or `/kitchen/weekly` to view the meal plan stored in
+   Mealie.
+5. Use `/admin` to review analytics and copy each person's calendar feed URL.
 
 Rotating a calendar URL from the admin page immediately invalidates that
 person's previous calendar subscription.
@@ -76,6 +85,10 @@ person's previous calendar subscription.
 - `/monthly` — monthly calendar
 - `/chores` — chore and schedule management
 - `/events` — family event management
+- `/kitchen/daily` — meals planned for one day
+- `/kitchen/weekly` — Monday-to-Sunday meal plan
+- `/kitchen/recipes` — search Mealie recipes, manage favorites, and schedule meals
+- `/kitchen/groceries` — view and update Mealie shopping lists
 - `/people` — household member setup
 - `/admin` — protected analytics and calendar administration
 
@@ -110,5 +123,18 @@ By default, local data is stored in `./data/kinops.db`.
 | `KINOPS_ADMIN_USERNAME` | unset | Admin login username |
 | `KINOPS_ADMIN_PASSWORD_HASH` | unset | Generated admin password hash |
 | `KINOPS_ADMIN_COOKIE_SECURE` | `false` | Restrict the session cookie to HTTPS |
+| `MEALIE_PORT` | `9925` | Host port for the Mealie UI and API docs |
+| `MEALIE_PUBLIC_URL` | `http://localhost:9925` | Browser-reachable Mealie URL |
+| `MEALIE_BASE_URL` | unset | KinOps-to-Mealie URL; use `http://mealie:9000` in Compose |
+| `MEALIE_API_TOKEN` | unset | Long-lived server-only Mealie token |
+| `MEALIE_DEFAULT_SHOPPING_LIST_ID` | unset | Optional preferred Mealie list |
+| `MEALIE_REQUEST_TIMEOUT` | `5s` | Timeout for server-side Mealie API requests |
 
 Admin routes are disabled unless both admin credential variables are set.
+
+Kitchen reads use a small in-memory cache. If Mealie becomes temporarily
+unavailable after a successful read, KinOps may show the prior meal, recipe,
+or grocery data with a visible stale-data warning. Kitchen writes are never
+queued or reported as successful until Mealie confirms them. Mealie
+connectivity and version are shown on the protected `/admin` page and do not
+affect the core `/healthz` check.

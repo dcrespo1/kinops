@@ -6,6 +6,7 @@ import (
 	"encoding/hex"
 	"errors"
 	"fmt"
+	"regexp"
 	"strings"
 	"time"
 
@@ -19,6 +20,8 @@ type Service struct {
 	location   *time.Location
 	now        func() time.Time
 }
+
+var htmlColorPattern = regexp.MustCompile(`^#[0-9A-Fa-f]{6}$`)
 
 func New(repository *store.SQLite, location *time.Location) *Service {
 	return &Service{repository: repository, location: location, now: time.Now}
@@ -108,14 +111,26 @@ func (s *Service) ListPeople(ctx context.Context) ([]domain.Person, error) {
 	return s.repository.ListPeople(ctx, false)
 }
 
+func (s *Service) GetHouseholdSettings(ctx context.Context) (domain.HouseholdSettings, error) {
+	return s.repository.GetHouseholdSettings(ctx)
+}
+
+func (s *Service) UpdateHouseholdEventColor(ctx context.Context, color string) error {
+	color = strings.TrimSpace(color)
+	if !htmlColorPattern.MatchString(color) {
+		return errors.New("household event color must be a six-digit hex color")
+	}
+	return s.repository.UpdateHouseholdEventColor(ctx, color)
+}
+
 func (s *Service) CreatePerson(ctx context.Context, person domain.Person) (domain.Person, error) {
 	person.Name = strings.TrimSpace(person.Name)
 	person.Color = strings.TrimSpace(person.Color)
 	if person.Name == "" {
 		return domain.Person{}, errors.New("name is required")
 	}
-	if person.Color == "" {
-		return domain.Person{}, errors.New("color is required")
+	if !htmlColorPattern.MatchString(person.Color) {
+		return domain.Person{}, errors.New("color must be a six-digit hex color")
 	}
 	token, err := generateCalendarToken()
 	if err != nil {

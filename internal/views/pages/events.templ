@@ -2,6 +2,7 @@ package pages
 
 import (
 	"fmt"
+	"strings"
 	"time"
 
 	"github.com/dcrespo1/kinops/internal/domain"
@@ -16,11 +17,11 @@ type EventFormData struct {
 	Edit   bool
 }
 
-templ Events(events []domain.HouseholdEvent) {
-	@layouts.Base("Events · KinOps", eventsContent(events))
+templ Events(events []domain.HouseholdEvent, people []domain.Person, settings domain.HouseholdSettings) {
+	@layouts.Base("Events · KinOps", eventsContent(events, people, settings))
 }
 
-templ eventsContent(events []domain.HouseholdEvent) {
+templ eventsContent(events []domain.HouseholdEvent, people []domain.Person, settings domain.HouseholdSettings) {
 	<section class="page-header">
 		<div><p class="eyebrow">Family calendar</p><h1>Household events</h1><p>Birthdays, appointments, vacations, and anything else on the family agenda.</p></div>
 		<a class="button" href="/events/new">New event</a>
@@ -30,13 +31,43 @@ templ eventsContent(events []domain.HouseholdEvent) {
 	} else {
 		<section class="event-admin-list">
 			for _, event := range events {
-				<article class="event-admin-card">
-					<div><p class="eyebrow">{ eventRuleLabel(event.Rule) }</p><h2>{ event.Title }</h2><p>{ eventDateLabel(event) }</p></div>
+				<article class="event-admin-card" style={ fmt.Sprintf("--event-color: %s", eventDefinitionColor(event, people, settings)) }>
+					<div><p class="eyebrow">{ eventRuleLabel(event.Rule) }</p><h2>{ event.Title }</h2><p>{ eventDateLabel(event) }</p><p class="event-audience-label"><span></span>{ eventDefinitionAudience(event, people) }</p></div>
 					<div class="actions"><a class="button secondary" href={ templ.URL(fmt.Sprintf("/events/%d/edit", event.ID)) }>Edit</a><form method="post" action={ templ.URL(fmt.Sprintf("/events/%d", event.ID)) } hx-confirm="Archive this event and remove its future occurrences?"><input type="hidden" name="_method" value="delete"/><button class="danger" type="submit">Archive</button></form></div>
 				</article>
 			}
 		</section>
 	}
+}
+
+func eventDefinitionColor(event domain.HouseholdEvent, people []domain.Person, settings domain.HouseholdSettings) string {
+	if len(event.AudiencePersonIDs) == 1 {
+		for _, person := range people {
+			if person.ID == event.AudiencePersonIDs[0] {
+				return person.Color
+			}
+		}
+	}
+	return settings.HouseholdEventColor
+}
+
+func eventDefinitionAudience(event domain.HouseholdEvent, people []domain.Person) string {
+	if len(event.AudiencePersonIDs) == 0 {
+		return "Household"
+	}
+	names := make([]string, 0, len(event.AudiencePersonIDs))
+	for _, personID := range event.AudiencePersonIDs {
+		for _, person := range people {
+			if person.ID == personID {
+				names = append(names, person.Name)
+				break
+			}
+		}
+	}
+	if len(names) == 0 {
+		return "Household"
+	}
+	return strings.Join(names, " & ")
 }
 
 templ EventForm(data EventFormData) {

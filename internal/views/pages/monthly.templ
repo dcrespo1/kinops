@@ -36,35 +36,58 @@ templ monthlyContent(view domain.MonthView) {
 		for _, week := range view.Weeks {
 			<div class="month-week">
 				for _, day := range week {
-					<a class={ "month-day", templ.KV("outside-month", !day.InMonth), templ.KV("has-overdue", monthDayOverdue(day, view.Today)) } href={ templ.URL("/daily?date=" + day.Date.Format(scheduling.DateLayout)) }>
-						<span class="month-date">{ fmt.Sprint(day.Date.Day()) }</span>
-						if len(day.Events) > 0 {
-							<span class="month-events">
-								for index, event := range day.Events {
-									if index < 2 {
-										<span class="month-event" title={ eventOccurrenceTitle(event, day.Date.Location()) }><span>{ eventOccurrenceTime(event, day.Date.Location()) }</span>{ event.Event.Title }</span>
+					<div class={ "month-day-shell", templ.KV("is-today", sameCalendarDate(day.Date, view.Today)) } x-data={ monthCrossState(day.Date) } x-bind:class="crossed && 'is-crossed'">
+						<a class={ "month-day", templ.KV("outside-month", !day.InMonth), templ.KV("has-overdue", monthDayOverdue(day, view.Today)) } href={ templ.URL("/daily?date=" + day.Date.Format(scheduling.DateLayout)) }>
+							<span class="month-date">{ fmt.Sprint(day.Date.Day()) }</span>
+							if sameCalendarDate(day.Date, view.Today) {
+								<span class="today-badge">Today</span>
+							}
+							if len(day.Events) > 0 {
+								<span class="month-events">
+									for index, event := range day.Events {
+										if index < 2 {
+											<span class="month-event" style={ eventColorStyle(event) } title={ eventOccurrenceTitle(event, day.Date.Location()) }><span>{ eventOccurrenceTime(event, day.Date.Location()) }</span>{ event.Event.Title }</span>
+										}
 									}
-								}
-								if len(day.Events) > 2 {
-									<span class="month-more-events">+{ fmt.Sprint(len(day.Events) - 2) } more</span>
-								}
-							</span>
+									if len(day.Events) > 2 {
+										<span class="month-more-events">+{ fmt.Sprint(len(day.Events) - 2) } more</span>
+									}
+								</span>
+							}
+							if len(day.Instances) > 0 {
+								<span class="month-ratio"><span class="month-ratio-wide">{ monthDayRatio(day) }</span><span class="month-ratio-compact">{ monthDayCompactRatio(day) }</span></span>
+								<span class="month-dots">
+									for _, summary := range monthPersonSummaries(day) {
+										<span class={ "month-person-dot", "month-person-dot-" + summary.Status } style={ fmt.Sprintf("--person-color: %s", summary.Color) } title={ summary.Label }></span>
+									}
+								</span>
+							} else if len(day.Events) == 0 {
+								<span class="month-empty">No chores</span>
+							}
+						</a>
+						if calendarDateBefore(day.Date, view.Today) {
+							<button class="month-cross-toggle" type="button" x-on:click="crossed = !crossed; crossed ? localStorage.setItem(storageKey, '1') : localStorage.removeItem(storageKey)" x-bind:aria-pressed="crossed.toString()" aria-label={ "Toggle crossed-out state for " + day.Date.Format("January 2, 2006") } title="Cross out or restore this day">
+								<span x-show="!crossed" aria-hidden="true">✓</span><span x-show="crossed" x-cloak aria-hidden="true">↶</span>
+							</button>
 						}
-						if len(day.Instances) > 0 {
-							<span class="month-ratio">{ monthDayRatio(day) }</span>
-							<span class="month-dots">
-								for _, summary := range monthPersonSummaries(day) {
-									<span class={ "month-person-dot", "month-person-dot-" + summary.Status } style={ fmt.Sprintf("--person-color: %s", summary.Color) } title={ summary.Label }></span>
-								}
-							</span>
-						} else if len(day.Events) == 0 {
-							<span class="month-empty">No chores</span>
-						}
-					</a>
+					</div>
 				}
 			</div>
 		}
 	</section>
+}
+
+func sameCalendarDate(left, right time.Time) bool {
+	return left.Format(scheduling.DateLayout) == right.Format(scheduling.DateLayout)
+}
+
+func calendarDateBefore(left, right time.Time) bool {
+	return left.Format(scheduling.DateLayout) < right.Format(scheduling.DateLayout)
+}
+
+func monthCrossState(date time.Time) string {
+	key := "kinops:calendar:crossed:" + date.Format(scheduling.DateLayout)
+	return fmt.Sprintf("{ crossed: localStorage.getItem('%s') === '1', storageKey: '%s' }", key, key)
 }
 
 func eventOccurrenceTime(item domain.ScheduledEvent, location *time.Location) string {
@@ -88,6 +111,16 @@ func monthDayRatio(day domain.MonthDay) string {
 		}
 	}
 	return fmt.Sprintf("%d/%d done", done, len(day.Instances))
+}
+
+func monthDayCompactRatio(day domain.MonthDay) string {
+	done := 0
+	for _, item := range day.Instances {
+		if item.Instance.Status == domain.InstanceDone {
+			done++
+		}
+	}
+	return fmt.Sprintf("%d/%d", done, len(day.Instances))
 }
 
 func monthDayOverdue(day domain.MonthDay, today time.Time) bool {

@@ -1,0 +1,15 @@
+package components
+
+import (
+	"github.com/dcrespo1/kinops/internal/scheduling"
+	"time"
+)
+
+templ KitchenNavigation(active string, date time.Time) {
+	<nav class="view-tabs kitchen-tabs" aria-label="Kitchen views">
+		<a href={ templ.URL("/kitchen/daily?date=" + date.Format(scheduling.DateLayout)) } aria-current={ ariaCurrent(active == "daily") }>Daily</a>
+		<a href={ templ.URL("/kitchen/weekly?date=" + date.Format(scheduling.DateLayout)) } aria-current={ ariaCurrent(active == "weekly") }>Weekly</a>
+		<a href={ templ.URL("/kitchen/recipes?date=" + date.Format(scheduling.DateLayout) + "&entry_type=dinner") } aria-current={ ariaCurrent(active == "recipes") }>Recipes</a>
+		<a href="/kitchen/groceries" aria-current={ ariaCurrent(active == "groceries") }>Groceries</a>
+	</nav>
+}

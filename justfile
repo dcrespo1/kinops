@@ -42,6 +42,9 @@ dev:
 test:
     go test -race ./...
 
+mealie-smoke:
+    KINOPS_MEALIE_SMOKE=1 MEALIE_BASE_URL=http://127.0.0.1:9925 go test -v -run TestLiveMealieReadContract ./internal/mealie
+
 check: generate
     go vet ./...
     go test -race ./...

@@ -25,14 +25,23 @@ type AdminService interface {
 	RotateCalendarToken(context.Context, int64) (domain.Person, error)
 }
 
+type MealieStatusService interface {
+	MealieStatus(context.Context) domain.MealieStatus
+}
+
 type AdminHandler struct {
 	service AdminService
 	auth    *auth.Manager
 	logger  *slog.Logger
+	mealie  MealieStatusService
 }
 
-func NewAdminHandler(service AdminService, authManager *auth.Manager, logger *slog.Logger) *AdminHandler {
-	return &AdminHandler{service: service, auth: authManager, logger: logger}
+func NewAdminHandler(service AdminService, authManager *auth.Manager, logger *slog.Logger, mealieStatus ...MealieStatusService) *AdminHandler {
+	handler := &AdminHandler{service: service, auth: authManager, logger: logger}
+	if len(mealieStatus) > 0 {
+		handler.mealie = mealieStatus[0]
+	}
+	return handler
 }
 
 func (h *AdminHandler) LoginPage(w http.ResponseWriter, r *http.Request) {
@@ -73,7 +82,11 @@ func (h *AdminHandler) Dashboard(w http.ResponseWriter, r *http.Request) {
 		h.internalError(w, r, err)
 		return
 	}
-	h.render(w, r, pages.Admin(pages.AdminPageData{Dashboard: dashboard, CSRFToken: csrfToken, BaseURL: requestBaseURL(r)}), http.StatusOK)
+	mealieStatus := domain.MealieStatus{Message: "Mealie integration is not configured."}
+	if h.mealie != nil {
+		mealieStatus = h.mealie.MealieStatus(r.Context())
+	}
+	h.render(w, r, pages.Admin(pages.AdminPageData{Dashboard: dashboard, CSRFToken: csrfToken, BaseURL: requestBaseURL(r), Mealie: mealieStatus}), http.StatusOK)
 }
 
 func (h *AdminHandler) Logout(w http.ResponseWriter, r *http.Request) {
